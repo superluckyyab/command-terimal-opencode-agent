@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="stylesheet" href="assets/broadsheet.css">
+<script src="_ds/broadsheet-842b0694-9893-4be7-89c5-dcb6c1fdef65/_ds_bundle.js"></script>
+<style>
+body{margin:0;background:var(--color-bg);font-family:var(--font-body);color:var(--color-text)}
+a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
+.dv-turn{padding:40px 44px 32px;border-bottom:1px solid rgba(0,0,0,.08);scroll-margin-top:16px}
+.dv-thd{display:flex;align-items:baseline;gap:10px;margin:0 0 6px}
+.dv-tid{font:600 10px ui-monospace,Menlo,monospace;padding:3px 7px;background:#201e1d;color:#f3f2f2;border-radius:4px;text-decoration:none}
+.dv-tname{font:600 15px/1.2 var(--font-heading);color:var(--color-text)}
+.dv-intro{max-width:760px;font:400 13px/1.55 var(--font-body);color:var(--color-neutral-700);margin:0 0 26px}
+.dv-opts{display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start}
+.dv-opt{flex:none;display:flex;flex-direction:column;gap:9px;scroll-margin-top:16px}
+.dv-oid{font:600 10.5px ui-monospace,Menlo,monospace;padding:3px 7px;background:rgba(0,0,0,.08);color:#201e1d;border-radius:5px;text-decoration:none}
+.dv-olabel{display:flex;align-items:baseline;gap:8px;font:400 12px/1.3 var(--font-body);color:var(--color-neutral-700)}
+.dv-card{max-width:100%;background:var(--color-bg);border:1px solid rgba(0,0,0,.1);border-radius:6px;box-shadow:var(--shadow-md);overflow:hidden}
+.dv-opt:target .dv-oid{background:var(--color-accent);color:#fff}
+.dv-next{margin:26px 0 0;font:12px/1.5 var(--font-body);color:var(--color-neutral-600)}
+</style>
+</helmet>
+
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Wireline — terminal manager with an AI Operator</span></div>
+<p class="dv-intro">A WindTerm-style workbench rebuilt in the Broadsheet system: paper chrome, serif labels, cyan for interaction, magenta reserved for the AI Operator's identity. The only dark surfaces are the terminals themselves. The Operator lives in a right-hand panel attached to the focused terminal, and also appears in the session tree as a session type of its own — an agent-driven device, like an SSH host. Modes: <em>Manual</em> (every command needs approval) and <em>Auto</em> (runs with a full ledger).</p>
+<div class="dv-opts">
+
+<!-- ═══════════ 1a MAIN WORKBENCH ═══════════ -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a>Main workbench — session tree · terminal tabs · AI Operator panel (Manual mode)</div>
+<div class="dv-card" style="width:1440px" data-screen-label="Main workbench">
+
+  <!-- top bar -->
+  <div style="display:flex;align-items:center;gap:20px;padding:12px 20px;border-bottom:1px solid var(--color-divider)">
+    <div style="display:flex;align-items:baseline;gap:10px">
+      <span style="font-family:var(--font-heading);font-weight:600;font-size:19px">Wireline</span>
+      <span style="font-style:italic;font-size:12px;color:var(--color-neutral-600)">every session, on the record</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+      <span style="font-size:12px;color:var(--color-neutral-600)">14 sessions · 3 live</span>
+      <button class="btn btn-secondary" style="gap:6px">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8h12M8 2v12"></path></svg>
+        Quick connect
+      </button>
+      <button class="btn btn-primary">New session</button>
+    </div>
+  </div>
+
+  <!-- body -->
+  <div style="display:grid;grid-template-columns:264px 1fr 356px;min-height:820px">
+
+    <!-- session tree -->
+    <div style="border-right:1px solid var(--color-divider);padding:16px 0;display:flex;flex-direction:column;gap:4px">
+      <div style="padding:0 16px 12px"><input class="input" type="text" placeholder="Filter sessions…" value=""></div>
+
+      <div style="padding:8px 16px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600);display:flex;align-items:center;gap:6px">
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3l3 4 3-4z"></path></svg> Production
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px;background:var(--color-accent-100);border-right:2px solid var(--color-accent)">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-accent-700)" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1"></rect><path d="M4 6l2.5 2L4 10M8 10h4"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600">web-01</div><div style="font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">10.0.4.11 · ssh</div></div>
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent);flex:none"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1"></rect><path d="M4 6l2.5 2L4 10M8 10h4"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">db-prod</div><div style="font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">10.0.4.30 · ssh</div></div>
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent);flex:none"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1"></rect><path d="M4 6l2.5 2L4 10M8 10h4"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">web-02</div><div style="font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">10.0.4.12 · ssh</div></div>
+      </div>
+
+      <div style="padding:14px 16px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600);display:flex;align-items:center;gap:6px">
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3l3 4 3-4z"></path></svg> AI Operators
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-accent-2-700)" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"></circle><circle cx="5.8" cy="7" r="0.8" fill="var(--color-accent-2-700)"></circle><circle cx="10.2" cy="7" r="0.8" fill="var(--color-accent-2-700)"></circle><path d="M5.5 10c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">deploy-agent</div><div style="font-size:11px;color:var(--color-accent-2-700)">agent · attached to web-01</div></div>
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"></circle><circle cx="5.8" cy="7" r="0.8" fill="var(--color-neutral-600)"></circle><circle cx="10.2" cy="7" r="0.8" fill="var(--color-neutral-600)"></circle><path d="M5.5 10c.7.7 1.6 1 2.5 1s1.8-.3 2.5-1"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">log-triage</div><div style="font-size:11px;color:var(--color-neutral-600)">agent · idle</div></div>
+      </div>
+
+      <div style="padding:14px 16px 4px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600);display:flex;align-items:center;gap:6px">
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="currentColor"><path d="M2 3l3 4 3-4z"></path></svg> Lab
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><rect x="2" y="5.5" width="12" height="5" rx="1"></rect><path d="M4.5 8h.01M6.5 8h.01"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">bench-router</div><div style="font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">COM3 · 115200 · serial</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><path d="M2 12l4-8h4l4 8z"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">pdu-rack2</div><div style="font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">192.168.9.4 · telnet</div></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 16px 8px 26px">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><path d="M3 4l3 4-3 4M8 12h5"></path></svg>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px">local shell</div><div style="font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">zsh · ~</div></div>
+        <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent);flex:none"></span>
+      </div>
+
+      <div style="margin-top:auto;padding:14px 16px 0;border-top:1px solid var(--color-divider)">
+        <a href="#1c" style="font-size:12.5px;text-decoration:none">Open session manager →</a>
+      </div>
+    </div>
+
+    <!-- terminal column -->
+    <div style="display:flex;flex-direction:column;min-width:0">
+      <!-- tabs -->
+      <div style="display:flex;align-items:stretch;gap:2px;padding:0 12px;border-bottom:1px solid var(--color-divider)">
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:2px solid var(--color-accent);font-size:13px;font-weight:600">
+          web-01 <span style="font-weight:400;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace;font-size:11px">ssh</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:13px;color:var(--color-neutral-700)">
+          db-prod <span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500)">ssh</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:13px;color:var(--color-accent-2-700)">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--color-accent-2)"></span> deploy-agent
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:11px 14px;font-size:13px;color:var(--color-neutral-700)">
+          local shell
+        </div>
+        <div style="display:flex;align-items:center;margin-left:auto;padding:0 4px">
+          <button class="btn btn-icon btn-ghost" aria-label="Split view"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1.5" y="2.5" width="13" height="11" rx="1"></rect><path d="M8 2.5v11"></path></svg></button>
+        </div>
+      </div>
+
+      <!-- terminal -->
+      <div style="flex:1;background:var(--color-neutral-900);color:#e8e5e3;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.65;padding:18px 22px;overflow:hidden">
+        <div><span style="color:var(--color-accent-400)">ops@web-01</span><span style="color:#8f8b89">:~$</span> systemctl status nginx</div>
+        <div style="color:#c9c5c3">● nginx.service — A high performance web server</div>
+        <div style="color:#c9c5c3">&nbsp;&nbsp;&nbsp;Active: <span style="color:#7ddf9a">active (running)</span> since Mon 2026-07-13 06:41:02 UTC; 3h 12min ago</div>
+        <div style="color:#c9c5c3">&nbsp;&nbsp;&nbsp;Main PID: 1182 (nginx) · Tasks: 5 · Memory: 18.4M</div>
+        <div style="margin-top:10px"><span style="color:var(--color-accent-400)">ops@web-01</span><span style="color:#8f8b89">:~$</span> tail -n 3 /var/log/nginx/error.log</div>
+        <div style="color:#c9c5c3">2026/07/13 09:52:18 [error] 1188#0: *4411 connect() failed (111: Connection refused)</div>
+        <div style="color:#c9c5c3">&nbsp;&nbsp;while connecting to upstream, upstream: "http://127.0.0.1:8080"</div>
+        <div style="color:#c9c5c3">2026/07/13 09:52:19 [error] 1188#0: *4413 no live upstreams while connecting</div>
+        <!-- agent-issued command -->
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:baseline">
+          <span style="flex:none;font-size:10px;letter-spacing:.08em;color:var(--color-accent-2-400);border:1px solid var(--color-accent-2-700);border-radius:2px;padding:1px 6px">AGENT</span>
+          <span><span style="color:var(--color-accent-400)">ops@web-01</span><span style="color:#8f8b89">:~$</span> <span style="color:var(--color-accent-2-300)">systemctl status app-backend</span></span>
+        </div>
+        <div style="color:#c9c5c3">● app-backend.service — Application backend (port 8080)</div>
+        <div style="color:#c9c5c3">&nbsp;&nbsp;&nbsp;Active: <span style="color:var(--color-accent-2-400)">failed (Result: exit-code)</span> since Mon 2026-07-13 09:51:47 UTC</div>
+        <div style="color:#c9c5c3">&nbsp;&nbsp;&nbsp;Process: 9214 ExecStart=/usr/bin/app-backend (code=exited, status=137)</div>
+        <div style="margin-top:10px"><span style="color:var(--color-accent-400)">ops@web-01</span><span style="color:#8f8b89">:~$</span> <span style="display:inline-block;width:8px;height:15px;background:#e8e5e3;vertical-align:text-bottom"></span></div>
+      </div>
+
+      <!-- status bar -->
+      <div style="display:flex;align-items:center;gap:18px;padding:7px 20px;border-top:1px solid var(--color-divider);font-size:11.5px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace">
+        <span style="color:var(--color-accent-700)">● connected</span>
+        <span>ssh · ed25519</span><span>utf-8</span><span>142×38</span><span>24 ms</span>
+        <span style="margin-left:auto;color:var(--color-accent-2-700)">agent attached · manual mode</span>
+      </div>
+    </div>
+
+    <!-- AI Operator panel -->
+    <div style="border-left:1px solid var(--color-divider);display:flex;flex-direction:column" data-screen-label="AI Operator panel">
+      <div style="padding:14px 18px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:10px">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent-2)"></span>
+        <span style="font-family:var(--font-heading);font-weight:600;font-size:15px">AI Operator</span>
+        <div class="seg" style="margin-left:auto">
+          <label class="seg-opt"><input type="radio" name="op-mode">Auto</label>
+          <label class="seg-opt"><input type="radio" name="op-mode" defaultChecked="{{ true }}">Manual</label>
+        </div>
+      </div>
+      <div style="padding:10px 18px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-neutral-700)">
+        Attached to <span class="tag tag-accent" style="font-family:ui-monospace,Menlo,monospace">web-01</span>
+        <a href="#1a" style="margin-left:auto;font-size:12px">change</a>
+      </div>
+
+      <!-- transcript -->
+      <div style="flex:1;padding:16px 18px;display:flex;flex-direction:column;gap:16px;overflow:hidden">
+        <!-- user -->
+        <div style="align-self:flex-end;max-width:88%;background:var(--color-surface);border-radius:var(--radius-lg);padding:10px 13px;font-size:13px;line-height:1.5">
+          web-01 is throwing 502s — find out why and fix it.
+        </div>
+        <!-- agent plan -->
+        <div style="max-width:94%;font-size:13px;line-height:1.55">
+          <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-2-700);margin-bottom:5px">Operator</div>
+          Nginx is up but its upstream on :8080 is refusing connections. <code style="font-family:ui-monospace,Menlo,monospace;font-size:12px;background:var(--color-surface);padding:1px 5px;border-radius:2px">app-backend</code> exited with status 137 — killed, likely OOM. I'll confirm, then restart it.
+        </div>
+        <!-- executed step -->
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-neutral-600)">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--color-accent-700)" stroke-width="2"><path d="M3 8.5l3.5 3.5L13 5"></path></svg>
+            ran · 09:53:12 · exit 0
+          </div>
+          <div style="background:var(--color-neutral-900);color:#e8e5e3;font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:var(--radius-md);padding:9px 12px">systemctl status app-backend</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--color-neutral-600)">
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--color-accent-700)" stroke-width="2"><path d="M3 8.5l3.5 3.5L13 5"></path></svg>
+            ran · 09:53:30 · exit 0
+          </div>
+          <div style="background:var(--color-neutral-900);color:#e8e5e3;font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:var(--radius-md);padding:9px 12px">dmesg | grep -i "killed process" | tail -1</div>
+          <div style="font-size:12px;color:var(--color-neutral-700);line-height:1.5">Confirmed: OOM-killer terminated PID 9214 (app-backend) at 09:51:44.</div>
+        </div>
+        <!-- proposal awaiting approval -->
+        <div style="display:flex;flex-direction:column;gap:8px;border-left:2px solid var(--color-accent-2);padding-left:12px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="tag tag-accent-2">awaiting approval</span>
+            <span style="font-size:11px;color:var(--color-neutral-600)">step 3 of 3</span>
+          </div>
+          <div style="background:var(--color-neutral-900);color:var(--color-accent-2-300);font-family:ui-monospace,Menlo,monospace;font-size:12px;border-radius:var(--radius-md);padding:9px 12px">sudo systemctl restart app-backend</div>
+          <div style="font-size:12px;color:var(--color-neutral-700);line-height:1.5">Restarts the backend service. Uses sudo; flagged by your <a href="#1e">guardrails</a>.</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="padding-block:6px">Run command</button>
+            <button class="btn btn-secondary" style="padding-block:6px">Edit</button>
+            <button class="btn btn-ghost" style="padding-block:6px;color:var(--color-neutral-700)">Skip</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- composer -->
+      <div style="padding:14px 18px;border-top:1px solid var(--color-divider);display:flex;flex-direction:column;gap:8px">
+        <textarea class="input" rows="2" placeholder="Tell the Operator what to do on web-01…"></textarea>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;color:var(--color-neutral-600)">Manual mode — every command waits for you.</span>
+          <button class="btn btn-primary" style="margin-left:auto;padding-block:6px">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 1b NEW SESSION DIALOG ═══════════ -->
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a>New session dialog — AI Agent is a first-class connection type</div>
+<div class="dv-card" style="width:760px" data-screen-label="New session dialog">
+  <div style="position:relative;min-height:640px;background:var(--color-neutral-200)">
+    <div style="position:absolute;inset:0;display:grid;place-items:center;padding:32px;background:color-mix(in srgb, var(--color-neutral-900) 42%, transparent)">
+      <div class="dialog" style="width:520px">
+        <div class="dialog-title">New session</div>
+        <div class="field">
+          <label>Type</label>
+          <div class="seg">
+            <label class="seg-opt"><input type="radio" name="ns-type" defaultChecked="{{ true }}">SSH</label>
+            <label class="seg-opt"><input type="radio" name="ns-type">Serial</label>
+            <label class="seg-opt"><input type="radio" name="ns-type">Telnet</label>
+            <label class="seg-opt"><input type="radio" name="ns-type">Local</label>
+            <label class="seg-opt"><input type="radio" name="ns-type">AI Agent</label>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 110px;gap:var(--space-2)">
+          <div class="field"><label>Host</label><input class="input" type="text" value="10.0.4.13"></div>
+          <div class="field"><label>Port</label><input class="input" type="text" value="22"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
+          <div class="field"><label>Username</label><input class="input" type="text" value="ops"></div>
+          <div class="field"><label>Group</label><input class="input" type="text" value="Production"></div>
+        </div>
+        <div class="field">
+          <label>Authentication</label>
+          <div style="display:flex;gap:var(--space-3);padding-top:2px">
+            <label class="radio"><input type="radio" name="ns-auth" defaultChecked="{{ true }}"><span class="dot"></span>Key — ed25519 (ops@desk)</label>
+            <label class="radio"><input type="radio" name="ns-auth"><span class="dot"></span>Password</label>
+          </div>
+        </div>
+        <div class="field">
+          <label>Label</label><input class="input" type="text" placeholder="web-03">
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--color-accent-2-100);border-radius:var(--radius-md);font-size:12.5px;color:var(--color-accent-2-800)">
+          <span style="width:6px;height:6px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
+          Allow AI Operators to attach to this session — commands follow your <a href="#1e" style="color:inherit">guardrails</a>.
+          <span style="margin-left:auto;font-size:11px;border:1px solid var(--color-accent-2-400);border-radius:2px;padding:1px 7px">on</span>
+        </div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary">Cancel</button>
+          <button class="btn btn-primary">Connect</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 1c SESSION MANAGER ═══════════ -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a>Session manager — groups, search, agent attachments at a glance</div>
+<div class="dv-card" style="width:1280px" data-screen-label="Session manager">
+  <div style="display:grid;grid-template-columns:220px 1fr;min-height:720px">
+    <div style="border-right:1px solid var(--color-divider);padding:24px 0">
+      <div style="padding:0 20px 16px;font-family:var(--font-heading);font-weight:600;font-size:17px">Sessions</div>
+      <div style="display:flex;flex-direction:column">
+        <div style="padding:9px 20px;font-size:13.5px;background:var(--color-accent-100);border-right:2px solid var(--color-accent);font-weight:600">All <span style="float:right;color:var(--color-neutral-600);font-weight:400">14</span></div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">Production <span style="float:right;color:var(--color-neutral-500)">5</span></div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">Staging <span style="float:right;color:var(--color-neutral-500)">3</span></div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">Lab <span style="float:right;color:var(--color-neutral-500)">4</span></div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-accent-2-700)">AI Operators <span style="float:right;color:var(--color-neutral-500)">2</span></div>
+      </div>
+      <div style="padding:20px 20px 0"><button class="btn btn-ghost" style="padding-inline:0">+ New group</button></div>
+    </div>
+    <div style="padding:24px 28px">
+      <div style="display:flex;gap:10px;align-items:center;margin-bottom:18px">
+        <input class="input" type="text" placeholder="Search by name, host, tag…" style="max-width:340px">
+        <div class="seg"><label class="seg-opt"><input type="radio" name="sm-f" defaultChecked="{{ true }}">All types</label><label class="seg-opt"><input type="radio" name="sm-f">SSH</label><label class="seg-opt"><input type="radio" name="sm-f">Serial</label><label class="seg-opt"><input type="radio" name="sm-f">Agents</label></div>
+        <button class="btn btn-primary" style="margin-left:auto">New session</button>
+      </div>
+      <table class="table">
+        <thead><tr><th>Name</th><th>Type</th><th>Address</th><th>Agent access</th><th>Last used</th><th></th></tr></thead>
+        <tbody>
+          <tr>
+            <td style="font-weight:600">web-01</td><td><span class="tag tag-accent">ssh</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">ops@10.0.4.11:22</td>
+            <td><span class="tag tag-accent-2">deploy-agent</span></td><td>live now</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">db-prod</td><td><span class="tag tag-accent">ssh</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">ops@10.0.4.30:22</td>
+            <td><span class="tag tag-neutral">blocked</span></td><td>live now</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">web-02</td><td><span class="tag tag-accent">ssh</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">ops@10.0.4.12:22</td>
+            <td><span class="tag tag-outline">allowed</span></td><td>2 h ago</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">deploy-agent</td><td><span class="tag tag-accent-2">agent</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">attached → web-01</td>
+            <td><span class="tag tag-neutral">manual mode</span></td><td>live now</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">log-triage</td><td><span class="tag tag-accent-2">agent</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">unattached</td>
+            <td><span class="tag tag-neutral">auto mode</span></td><td>yesterday</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">bench-router</td><td><span class="tag tag-neutral">serial</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">COM3 · 115200 8N1</td>
+            <td><span class="tag tag-neutral">blocked</span></td><td>3 d ago</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">pdu-rack2</td><td><span class="tag tag-neutral">telnet</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">192.168.9.4:23</td>
+            <td><span class="tag tag-neutral">blocked</span></td><td>1 w ago</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+          <tr>
+            <td style="font-weight:600">local shell</td><td><span class="tag tag-neutral">local</span></td>
+            <td style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">zsh · ~</td>
+            <td><span class="tag tag-outline">allowed</span></td><td>live now</td>
+            <td style="text-align:right"><a href="#1a" style="font-size:12.5px">open</a></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 1d SFTP ═══════════ -->
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a>File transfer — dual pane with a transfer ledger</div>
+<div class="dv-card" style="width:1280px" data-screen-label="File transfer">
+  <div style="display:flex;align-items:center;gap:14px;padding:14px 24px;border-bottom:1px solid var(--color-divider)">
+    <span style="font-family:var(--font-heading);font-weight:600;font-size:16px">File transfer</span>
+    <span class="tag tag-accent" style="font-family:ui-monospace,Menlo,monospace">web-01 · sftp</span>
+    <span style="margin-left:auto;font-size:12px;color:var(--color-neutral-600)">2 transfers queued</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;min-height:520px">
+    <div style="border-right:1px solid var(--color-divider);padding:18px 24px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+        <span style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600)">Local</span>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">~/deploys/</span>
+      </div>
+      <table class="table">
+        <thead><tr><th>Name</th><th>Size</th><th>Modified</th></tr></thead>
+        <tbody>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">app-backend_2.4.1.tar.gz</td><td>48.2 MB</td><td>today 09:12</td></tr>
+          <tr style="background:var(--color-accent-100)"><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600">nginx.conf</td><td>4.1 KB</td><td>today 09:48</td></tr>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">rollback.sh</td><td>1.9 KB</td><td>yesterday</td></tr>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">env.production</td><td>0.8 KB</td><td>Jul 9</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div style="padding:18px 24px">
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+        <span style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600)">Remote</span>
+        <span style="font-family:ui-monospace,Menlo,monospace;font-size:12.5px">/etc/nginx/</span>
+      </div>
+      <table class="table">
+        <thead><tr><th>Name</th><th>Size</th><th>Perms</th></tr></thead>
+        <tbody>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">conf.d/</td><td>—</td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">drwxr-xr-x</td></tr>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">nginx.conf</td><td>3.9 KB</td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">-rw-r--r--</td></tr>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">mime.types</td><td>5.2 KB</td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">-rw-r--r--</td></tr>
+          <tr><td style="font-family:ui-monospace,Menlo,monospace;font-size:13px">sites-enabled/</td><td>—</td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px">drwxr-xr-x</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div style="border-top:1px solid var(--color-divider);padding:14px 24px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:12px;font-size:12.5px">
+      <span style="font-family:ui-monospace,Menlo,monospace">nginx.conf → web-01:/etc/nginx/</span>
+      <div style="flex:1;max-width:320px;height:4px;background:var(--color-neutral-200);border-radius:2px"><div style="width:72%;height:100%;background:var(--color-accent);border-radius:2px"></div></div>
+      <span style="color:var(--color-neutral-600)">72% · 1.2 MB/s</span>
+      <span class="tag tag-accent-2" style="margin-left:auto">queued by deploy-agent</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;font-size:12.5px;color:var(--color-neutral-600)">
+      <span style="font-family:ui-monospace,Menlo,monospace">app-backend_2.4.1.tar.gz → web-01:/opt/releases/</span>
+      <span>waiting</span>
+      <button class="btn btn-ghost" style="margin-left:auto;padding-block:4px">Cancel</button>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════ 1e SETTINGS ═══════════ -->
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a>Settings — AI Operator guardrails</div>
+<div class="dv-card" style="width:1120px" data-screen-label="Settings">
+  <div style="display:grid;grid-template-columns:220px 1fr;min-height:700px">
+    <div style="border-right:1px solid var(--color-divider);padding:24px 0">
+      <div style="padding:0 20px 16px;font-family:var(--font-heading);font-weight:600;font-size:17px">Settings</div>
+      <div style="display:flex;flex-direction:column">
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">General</div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">Terminal</div>
+        <div style="padding:9px 20px;font-size:13.5px;background:var(--color-accent-100);border-right:2px solid var(--color-accent);font-weight:600">AI Operator</div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">Keys &amp; identities</div>
+        <div style="padding:9px 20px;font-size:13.5px;color:var(--color-neutral-800)">Sync</div>
+      </div>
+    </div>
+    <div style="padding:28px 36px;max-width:680px">
+      <h3 style="font-size:22px;margin-bottom:4px">AI Operator</h3>
+      <p style="font-size:13px;color:var(--color-neutral-700);margin-bottom:26px">How agents may drive your terminals. Every agent action is written to the ledger, whatever the mode.</p>
+
+      <div class="field" style="margin-bottom:22px">
+        <label>Default mode for new attachments</label>
+        <div class="seg">
+          <label class="seg-opt"><input type="radio" name="st-mode">Auto — run and record</label>
+          <label class="seg-opt"><input type="radio" name="st-mode" defaultChecked="{{ true }}">Manual — approve each command</label>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:22px">
+        <label>Always require approval for</label>
+        <div style="display:flex;flex-direction:column;gap:9px;padding-top:4px">
+          <label class="radio"><input type="checkbox" defaultChecked="{{ true }}"><span class="dot" style="border-radius:2px"></span>Commands using sudo or run as root</label>
+          <label class="radio"><input type="checkbox" defaultChecked="{{ true }}"><span class="dot" style="border-radius:2px"></span>Destructive patterns — rm -rf, mkfs, dd, DROP TABLE</label>
+          <label class="radio"><input type="checkbox" defaultChecked="{{ true }}"><span class="dot" style="border-radius:2px"></span>Service restarts on Production group</label>
+          <label class="radio"><input type="checkbox"><span class="dot" style="border-radius:2px"></span>Outbound network calls — curl, wget, scp</label>
+        </div>
+      </div>
+
+      <div class="field" style="margin-bottom:22px">
+        <label>Sessions agents may attach to</label>
+        <div class="seg">
+          <label class="seg-opt"><input type="radio" name="st-scope">All sessions</label>
+          <label class="seg-opt"><input type="radio" name="st-scope" defaultChecked="{{ true }}">Allowlist per session</label>
+          <label class="seg-opt"><input type="radio" name="st-scope">None</label>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:22px">
+        <div class="field"><label>Model</label><input class="input" type="text" value="claude-sonnet-4"></div>
+        <div class="field"><label>Command timeout</label><input class="input" type="text" value="120 s"></div>
+      </div>
+
+      <div class="field" style="margin-bottom:26px">
+        <label>Ledger retention</label>
+        <input class="input" type="text" value="90 days — export as JSONL" style="max-width:320px">
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary">Save changes</button>
+        <button class="btn btn-secondary">Restore defaults</button>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "make the workbench <a class="dv-oid" href="#1a">1a</a> show Auto mode with the ledger" · "split terminal view in <a class="dv-oid" href="#1a">1a</a>" · "dark theme variant"</p>
+</section>
+
+</x-dc>
+</body>
+</html>
