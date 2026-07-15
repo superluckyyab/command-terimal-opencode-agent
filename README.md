@@ -1,0 +1,1 @@
+# command-terimal-opencode-agent
