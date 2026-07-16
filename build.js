@@ -27,8 +27,11 @@ const html = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Wireline</title>
+<link rel="stylesheet" href="./vendor/xterm/xterm.css">
 <script src="./vendor/react.production.min.js"></script>
 <script src="./vendor/react-dom.production.min.js"></script>
+<script src="./vendor/xterm/xterm.js"></script>
+<script src="./vendor/xterm/addon-fit.js"></script>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -50,6 +53,9 @@ fs.writeFileSync(path.join(dist, 'index.html'), html);
 copy('support.js');
 copy('vendor/react.production.min.js');
 copy('vendor/react-dom.production.min.js');
+copy('vendor/xterm/xterm.js');
+copy('vendor/xterm/addon-fit.js');
+copy('vendor/xterm/xterm.css');
 copy('assets/broadsheet.css');
 copy('_ds/broadsheet-842b0694-9893-4be7-89c5-dcb6c1fdef65/_ds_bundle.js');
 copy('_ds/broadsheet-842b0694-9893-4be7-89c5-dcb6c1fdef65/styles.css');

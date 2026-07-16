@@ -6,6 +6,19 @@ command history/palette, timed sender, one-key login, quick commands, settings,
 MCP/skills/workflows, timers, dark theme). It is packaged as a native Windows
 desktop app with Tauri, following the same setup as `../web-agent`.
 
+## Real terminal
+
+Inside the desktop app the terminal is a **real shell** — `xterm.js` (the same
+engine Tabby uses) on the frontend, driven by a native PTY on the Rust side
+(`portable-pty`, which uses Windows ConPTY). It spawns the platform default
+shell (`cmd.exe` on Windows, `$SHELL` on Unix). In a plain browser (no Tauri)
+the app falls back to the scripted demo terminal, so the design preview keeps
+working.
+
+Scope: one shared local shell for now. Per-tab shells and real remote SSH
+(the session types in the tree) are future work — they need an SSH stack, which
+`portable-pty` does not provide.
+
 ## AI Operator
 
 - **No key configured** → the Operator runs the built-in scripted playbooks

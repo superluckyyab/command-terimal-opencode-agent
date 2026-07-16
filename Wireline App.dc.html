@@ -241,6 +241,10 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
 
       <!-- terminal (drop target) -->
       <div style="position:relative;flex:1;min-height:0;display:flex" onDragOver="{{ termDragOver }}" onDragLeave="{{ termDragLeave }}" onDrop="{{ termDrop }}" onContextMenu="{{ termCtx }}" onMouseUp="{{ termMouseUp }}">
+        <!-- real terminal (xterm.js + native PTY) — only in the desktop app; the fake terminal below stays for browser preview -->
+        <sc-if value="{{ xtermOn }}" hint-placeholder-val="{{ false }}">
+          <div ref="{{ xtermHostRef }}" style="position:absolute;inset:0;z-index:12;background:#1b1a19;padding:6px 8px"></div>
+        </sc-if>
         <div ref="{{ termRef }}" style="flex:1;background:var(--color-neutral-900);color:#e8e5e3;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:{{ termFont }};line-height:{{ termLH }};padding:8px 14px;overflow-y:auto;overflow-wrap:break-word" onClick="{{ focusTerm }}">
           <sc-for list="{{ lines }}" as="ln" hint-placeholder-count="8">
             <div ref="{{ ln.ref }}" style="display:flex;gap:8px;align-items:baseline">
@@ -1229,6 +1233,7 @@ class Component extends DCLogic {
     this.termRef = React.createRef();
     this.chatRef = React.createRef();
     this.termInputRef = React.createRef();
+    this.xtermHostRef = React.createRef();
     this.matchRef = React.createRef();
     this.runQueue = null;
     this.seq = 100;
@@ -1250,6 +1255,68 @@ class Component extends DCLogic {
       else if (e.key === 'Escape' && this.state.paletteOpen) this.setState({ paletteOpen: false });
     };
     window.addEventListener('keydown', this.keyHandler);
+    this.initXterm();
+  }
+
+  // Real terminal: xterm.js (the same engine Tabby uses) bound to a native PTY
+  // over Tauri commands. Only runs inside the desktop app (window.__TAURI__);
+  // in a plain browser it stays dormant and the scripted terminal shows instead.
+  // ponytail: one shared local shell (id 'main'); per-tab shells + SSH are future work.
+  xtermAvailable() {
+    return !!(window.__TAURI__ && typeof window.Terminal !== 'undefined');
+  }
+
+  initXterm() {
+    if (this.xterm || !this.xtermAvailable()) return;
+    const host = this.xtermHostRef.current;
+    if (!host) return;
+    const T = window.__TAURI__;
+    const invoke = T.invoke;
+    const listen = T.event && T.event.listen;
+    const term = new window.Terminal({
+      fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+      fontSize: 13,
+      cursorBlink: true,
+      theme: { background: '#1b1a19', foreground: '#e8e5e3', cursor: '#3fb5d6' }
+    });
+    let fit = null;
+    try { fit = new window.FitAddon.FitAddon(); term.loadAddon(fit); } catch (e) {}
+    term.open(host);
+    try { if (fit) fit.fit(); } catch (e) {}
+    this.xterm = term; this.xtermFit = fit;
+    const id = 'main'; this.xtermId = id;
+    invoke('pty_spawn', { id, cols: term.cols || 80, rows: term.rows || 24 })
+      .catch(err => term.write('\r\n[pty spawn failed: ' + err + ']\r\n'));
+    term.onData(d => { invoke('pty_write', { id, data: d }).catch(() => {}); });
+    term.onResize(({ cols, rows }) => { invoke('pty_resize', { id, cols, rows }).catch(() => {}); });
+    if (listen) {
+      listen('pty://data', ev => { const p = ev.payload; if (p && p.id === id) term.write(new Uint8Array(p.data)); }).then(un => { this.xtermUnData = un; });
+      listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === id) term.write('\r\n[process exited]\r\n'); }).then(un => { this.xtermUnExit = un; });
+    }
+    this.xtermResize = () => { try { if (this.xtermFit) this.xtermFit.fit(); } catch (e) {} };
+    window.addEventListener('resize', this.xtermResize);
+    setTimeout(this.xtermResize, 60);
+  }
+
+  // Keep the xterm element attached to the current host (survives view switches),
+  // and (re)create it when the workbench remounts the host.
+  syncXterm() {
+    if (!this.xtermAvailable()) return;
+    const host = this.xtermHostRef.current;
+    if (!host) return;
+    if (!this.xterm) { this.initXterm(); return; }
+    if (this.xterm.element && this.xterm.element.parentNode !== host) {
+      host.appendChild(this.xterm.element);
+      this.xtermResize && this.xtermResize();
+    }
+  }
+
+  cleanupXterm() {
+    if (this.xtermUnData) { try { this.xtermUnData(); } catch (e) {} }
+    if (this.xtermUnExit) { try { this.xtermUnExit(); } catch (e) {} }
+    if (this.xtermResize) window.removeEventListener('resize', this.xtermResize);
+    if (window.__TAURI__ && this.xtermId) { try { window.__TAURI__.invoke('pty_kill', { id: this.xtermId }); } catch (e) {} }
+    if (this.xterm) { try { this.xterm.dispose(); } catch (e) {} this.xterm = null; }
   }
 
   applyBodyTheme() {
@@ -1263,6 +1330,7 @@ class Component extends DCLogic {
 
   componentDidUpdate() {
     this.applyBodyTheme();
+    this.syncXterm();
     const t = this.termRef.current;
     if (t) {
       if (this.pendingGoto != null && this.matchRef.current) {
@@ -1351,7 +1419,7 @@ class Component extends DCLogic {
     this.setState(s => ({ sender: Object.assign({}, s.sender, { running: false }) }));
   }
 
-  componentWillUnmount() { clearTimeout(this.senderTimer); clearTimeout(this.hoverTimer); if (this.timerHandles) Object.values(this.timerHandles).forEach(h => clearTimeout(h)); window.removeEventListener('keydown', this.keyHandler); }
+  componentWillUnmount() { clearTimeout(this.senderTimer); clearTimeout(this.hoverTimer); if (this.timerHandles) Object.values(this.timerHandles).forEach(h => clearTimeout(h)); window.removeEventListener('keydown', this.keyHandler); this.cleanupXterm(); }
 
   duplicateSession(id) {
     const src = this.sess(id); if (!src) return;
@@ -2618,6 +2686,7 @@ class Component extends DCLogic {
       termFont: st.termFont + 'px', termLH: String(st.termLH),
       lines: renderedLines,
       termRef: this.termRef, chatRef: this.chatRef, termInputRef: this.termInputRef,
+      xtermOn: this.xtermAvailable(), xtermHostRef: this.xtermHostRef,
       focusTerm: () => { if (this.termInputRef.current) this.termInputRef.current.focus(); },
       promptUser: active ? 'ops@' + active.host : 'ops@—',
       termDraft: st.termDraft,

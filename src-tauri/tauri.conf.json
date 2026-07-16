@@ -3,11 +3,12 @@
     "beforeBuildCommand": "node build.js",
     "beforeDevCommand": "node build.js",
     "devPath": "../dist",
-    "distDir": "../dist"
+    "distDir": "../dist",
+    "withGlobalTauri": true
   },
   "package": {
     "productName": "Wireline",
-    "version": "1.0.0"
+    "version": "1.1.0"
   },
   "tauri": {
     "allowlist": {
