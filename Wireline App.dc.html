@@ -243,7 +243,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
       <div style="position:relative;flex:1;min-height:0;display:flex" onDragOver="{{ termDragOver }}" onDragLeave="{{ termDragLeave }}" onDrop="{{ termDrop }}" onContextMenu="{{ termCtx }}" onMouseUp="{{ termMouseUp }}">
         <!-- real terminal (xterm.js + native PTY) — only in the desktop app; the fake terminal below stays for browser preview -->
         <sc-if value="{{ xtermOn }}" hint-placeholder-val="{{ false }}">
-          <div ref="{{ xtermHostRef }}" style="position:absolute;inset:0;z-index:12;background:#1b1a19;padding:6px 8px"></div>
+          <div ref="{{ xtermHostRef }}" style="position:absolute;inset:0;z-index:12;background:#1b1a19;padding:6px 8px;overflow:hidden"></div>
         </sc-if>
         <div ref="{{ termRef }}" style="flex:1;background:var(--color-neutral-900);color:#e8e5e3;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:{{ termFont }};line-height:{{ termLH }};padding:8px 14px;overflow-y:auto;overflow-wrap:break-word" onClick="{{ focusTerm }}">
           <sc-for list="{{ lines }}" as="ln" hint-placeholder-count="8">
@@ -1427,6 +1427,12 @@ class Component extends DCLogic {
     if (!this.xterm) { this.initXterm(); return; }
     if (this.xterm.element && this.xterm.element.parentNode !== host) {
       host.appendChild(this.xterm.element);
+      this.xtermResize && this.xtermResize();
+    }
+    // refit when the terminal area height changes (a bottom panel opened/closed,
+    // window resized) so the xterm doesn't overflow and cover the panels below
+    if (host.clientHeight && host.clientHeight !== this._lastFitH) {
+      this._lastFitH = host.clientHeight;
       this.xtermResize && this.xtermResize();
     }
     const active = this.sess(this.state.activeTab);
