@@ -452,6 +452,9 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
               <div style="max-width:94%;font-size:13px;line-height:1.55">
                 <div style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-accent-2-700);margin-bottom:4px">Operator</div>
                 <span style="white-space:pre-wrap;font-family:{{ m.ff }}">{{ m.text }}</span>
+                <sc-if value="{{ m.hasRun }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-top:7px"><button class="btn btn-secondary" style="padding-block:4px;font-size:12px" onClick="{{ m.runInTerm }}">▶ Run in terminal</button></div>
+                </sc-if>
               </div>
             </sc-if>
             <sc-if value="{{ m.cmd }}" hint-placeholder-val="{{ false }}">
@@ -866,8 +869,20 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
               <div class="field" style="margin:0"><label>Host</label><input class="input" type="text" placeholder="hostname or IP" value="{{ dlgHost }}" onChange="{{ onDlgHost }}"></div>
               <div class="field" style="margin:0"><label>Port</label><input class="input" type="text" value="{{ dlgPort }}" onChange="{{ onDlgPort }}"></div>
             </div>
-            <div class="field" style="margin:0"><label>Username</label><input class="input" type="text" placeholder="e.g. root" value="{{ dlgUser }}" onChange="{{ onDlgUser }}"></div>
-            <div style="font-size:11px;color:var(--color-neutral-600)">The password (and host-key confirmation) is entered in the terminal after connecting.</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
+              <div class="field" style="margin:0"><label>Username</label><input class="input" type="text" placeholder="e.g. root" value="{{ dlgUser }}" onChange="{{ onDlgUser }}"></div>
+              <div class="field" style="margin:0"><label>Password</label><input class="input" type="password" placeholder="sent when prompted" value="{{ dlgPass }}" onChange="{{ onDlgPass }}"></div>
+            </div>
+            <sc-if value="{{ hasOneKeys }}" hint-placeholder-val="{{ false }}">
+              <div class="field" style="margin:0"><label>OneKey (saved credential)</label>
+                <select class="input" value="{{ dlgOneKey }}" onChange="{{ onDlgOneKey }}">
+                  <option value="">— none, use the fields above —</option>
+                  <sc-for list="{{ oneKeyOpts }}" as="ok" hint-placeholder-count="3"><option value="{{ ok.id }}">{{ ok.label }}</option></sc-for>
+                </select>
+              </div>
+            </sc-if>
+            <label class="radio" style="font-size:12.5px;user-select:none"><input type="checkbox" checked="{{ dlgSaveKey }}" onChange="{{ onDlgSaveKey }}"><span class="dot" style="border-radius:2px"></span>Save these credentials as a OneKey</label>
+            <div style="font-size:11px;color:var(--color-neutral-600)">Leave the password blank to type it in the terminal instead. Passwords are stored only on this machine.</div>
           </sc-if>
 
           <!-- Serial fields -->
@@ -1191,10 +1206,11 @@ class Component extends DCLogic {
       termSel: 0,
       termSuggHide: false,
       timeout: '120',
+      ipColor: true,
       apiBase: '',
       apiKey: '',
       dialogOpen: false,
-      dlg: { type: 'SSH', host: '', port: '22', user: '', group: 'Sessions', label: '', agent: false, oneKey: '', baud: '115200', dataBits: '8', parity: 'None', stopBits: '1', flow: 'None', serialData: 'binary', term: 'xterm-256color', charset: 'UTF-8', desc: '', sftp: true, system: 'linux', sysmon: false }
+      dlg: { type: 'SSH', host: '', port: '22', user: '', pass: '', saveKey: false, group: 'Sessions', label: '', agent: false, oneKey: '', baud: '115200', dataBits: '8', parity: 'None', stopBits: '1', flow: 'None', serialData: 'binary', term: 'xterm-256color', charset: 'UTF-8', desc: '', sftp: true, system: 'linux', sysmon: false }
     };
     this.termRef = React.createRef();
     this.chatRef = React.createRef();
@@ -1215,6 +1231,10 @@ class Component extends DCLogic {
     try {
       const s = JSON.parse(localStorage.getItem('wireline-model-v1') || 'null');
       if (s) this.setState({ apiBase: s.apiBase || '', apiKey: s.apiKey || '', model: s.model || this.state.model });
+    } catch (e) {}
+    try {
+      const ok = JSON.parse(localStorage.getItem('wireline-onekeys-v1') || 'null');
+      if (Array.isArray(ok)) this.setState({ oneKeys: ok, activeKey: ok[0] ? ok[0].id : null });
     } catch (e) {}
     this.keyHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) { e.preventDefault(); this.setState(s => ({ paletteOpen: !s.paletteOpen, paletteQuery: '', paletteSel: 0 })); }
@@ -1255,6 +1275,9 @@ class Component extends DCLogic {
     const id = 'pty:' + (sess ? sess.id : 'shell') + ':' + (++this.seq);
     this.xtermId = id;
     this.xtermSessId = sess ? sess.id : null;
+    this._pendPass = (sess && sess.pass) ? sess.pass : '';
+    this._pwSent = false;
+    this._scroll = '';
     try { term.reset(); } catch (e) {}
     if (spec) term.write('Connecting to ' + (sess.user ? sess.user + '@' : '') + sess.addr + (sess.port && String(sess.port) !== '22' ? ':' + sess.port : '') + ' …\r\n');
     const payload = { id, cols: term.cols || 80, rows: term.rows || 24 };
@@ -1284,14 +1307,52 @@ class Component extends DCLogic {
     term.onData(d => { if (this.xtermId) invoke('pty_write', { id: this.xtermId, data: d }).catch(() => {}); });
     term.onResize(({ cols, rows }) => { if (this.xtermId) invoke('pty_resize', { id: this.xtermId, cols, rows }).catch(() => {}); });
     if (listen) {
-      listen('pty://data', ev => { const p = ev.payload; if (p && p.id === this.xtermId) term.write(new Uint8Array(p.data)); }).then(un => { this.xtermUnData = un; });
+      listen('pty://data', ev => { const p = ev.payload; if (p && p.id === this.xtermId) this.onPtyData(p.data); }).then(un => { this.xtermUnData = un; });
       listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === this.xtermId) term.write('\r\n[process exited]\r\n'); }).then(un => { this.xtermUnExit = un; });
+      // OS file drop → paste the path(s) into the terminal
+      listen('tauri://file-drop', ev => {
+        const paths = ev.payload; if (!Array.isArray(paths) || !this.xtermId) return;
+        this.writeToPty(paths.map(p => /\s/.test(p) ? '"' + p + '"' : p).join(' ') + ' ');
+      }).then(un => { this.xtermUnDrop = un; });
     }
     this.xtermResize = () => { try { if (this.xtermFit) this.xtermFit.fit(); } catch (e) {} };
     window.addEventListener('resize', this.xtermResize);
     setTimeout(this.xtermResize, 60);
     this.connectSession(this.sess(this.state.activeTab));
   }
+
+  // All PTY output flows through here: keep a rolling capture for the AI to read,
+  // auto-answer the ssh password prompt, and optionally quick-color IPs.
+  onPtyData(bytes) {
+    const term = this.xterm; if (!term) return;
+    let text = '';
+    try { text = new TextDecoder().decode(new Uint8Array(bytes)); } catch (e) {}
+    this._scroll = ((this._scroll || '') + text).slice(-8000);
+    if (!this._pwSent && this._pendPass && /(assword|passphrase|verification code)\s*[:：]?\s*$/i.test(text)) {
+      this._pwSent = true;
+      const pw = this._pendPass;
+      setTimeout(() => this.writeToPty(pw + '\n'), 120);
+    }
+    const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
+    if (this.state.ipColor && inNormal && text) term.write(this.ipColorize(text));
+    else term.write(new Uint8Array(bytes));
+  }
+
+  // WindTerm-style quick color: highlight IPv4 addresses. Reset with 39 (default
+  // fg) so it doesn't clobber other attributes. Only used on the normal buffer.
+  ipColorize(text) {
+    return text.replace(/(?<![\w.])((?:\d{1,3}\.){3}\d{1,3})(?![\w.])/g, '\x1b[38;5;80m$1\x1b[39m');
+  }
+
+  writeToPty(data) {
+    if (this.xterm && this.xtermId && window.__TAURI__) {
+      window.__TAURI__.invoke('pty_write', { id: this.xtermId, data }).catch(() => {});
+      return true;
+    }
+    return false;
+  }
+
+  terminalText() { return this._scroll || ''; }
 
   // Keep the xterm element attached to the current host (survives view switches),
   // and reconnect the PTY when the active tab changes to a different session.
@@ -1312,6 +1373,7 @@ class Component extends DCLogic {
   cleanupXterm() {
     if (this.xtermUnData) { try { this.xtermUnData(); } catch (e) {} }
     if (this.xtermUnExit) { try { this.xtermUnExit(); } catch (e) {} }
+    if (this.xtermUnDrop) { try { this.xtermUnDrop(); } catch (e) {} }
     if (this.xtermResize) window.removeEventListener('resize', this.xtermResize);
     if (window.__TAURI__ && this.xtermId) { try { window.__TAURI__.invoke('pty_kill', { id: this.xtermId }); } catch (e) {} }
     if (this.xterm) { try { this.xterm.dispose(); } catch (e) {} this.xterm = null; }
@@ -1400,6 +1462,8 @@ class Component extends DCLogic {
       ]);
       this.recordCmd(id, payload);
     });
+    // real terminal: write the line to the live PTY so it actually reaches the shell/host
+    this.writeToPty(payloadRaw + '\n');
     this.setState(s => ({ sender: Object.assign({}, s.sender, { sent: s.sender.sent + 1 }) }), () => {
       const ms = Math.max(50, Math.round(parseFloat(this.state.sender.interval || '1') * 1000));
       this.senderTimer = setTimeout(() => this.senderTick(), ms);
@@ -1814,14 +1878,17 @@ class Component extends DCLogic {
   }
 
   // ─── AI Operator ───
-  opSay(text, mono) {
-    this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'op', text, mono: !!mono }) }));
+  opSay(text, mono, runCmd) {
+    this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'op', text, mono: !!mono, runCmd: runCmd || '' }) }));
   }
 
   // Real model call over an OpenAI-compatible endpoint (see Settings → API base URL / key).
   // When no endpoint is configured, sendAI falls back to the built-in scripted playbooks.
   async askModel(sessName) {
-    const sys = 'You are the AI Operator inside Wireline, a terminal manager. You are attached to the session "' + sessName + '". Give concise, practical operations help. Show any shell commands you suggest in fenced code blocks. Reply in the user’s language.';
+    let sys = 'You are the AI Operator inside Wireline, a terminal manager. You are attached to the session "' + sessName + '". Give concise, practical operations help. When you want a command to run in the terminal, put it on its own line in a fenced code block. Reply in the user’s language.';
+    // let the model read what is currently on the terminal
+    const scroll = this.terminalText();
+    if (scroll && scroll.trim()) sys += '\n\nCurrent terminal output (most recent last):\n' + scroll.slice(-4000);
     const history = this.state.chat
       .filter(m => (m.kind === 'user' || m.kind === 'op') && m.text)
       .slice(-12)
@@ -1839,8 +1906,9 @@ class Component extends DCLogic {
       if (!resp.ok) throw new Error('HTTP ' + resp.status);
       const data = await resp.json();
       const txt = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '(empty reply)';
+      const mm = txt.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
       this.setState({ thinking: false });
-      this.opSay(txt);
+      this.opSay(txt, false, mm ? mm[1].trim() : '');
     } catch (e) {
       this.setState({ thinking: false });
       this.opSay('Model request failed: ' + (e.message || e) + '\nCheck the API base URL and key in Settings.', true);
@@ -2006,6 +2074,8 @@ class Component extends DCLogic {
     const host = this.sess(q.sessionId) ? this.sess(q.sessionId).host : 'host';
     this.appendLines(q.sessionId, [this.mkLine.p(host, step.cmd, true)].concat(step.out));
     this.recordCmd(q.sessionId, step.cmd);
+    // run the approved command in the real terminal too
+    this.writeToPty(step.cmd + '\n');
     q.idx += 1;
     setTimeout(() => this.proposeNext(), 700);
   }
@@ -2031,10 +2101,25 @@ class Component extends DCLogic {
     const type = { 'SSH': 'ssh', 'Serial': 'serial', 'Telnet': 'telnet', 'Local': 'local', 'AI Agent': 'agent' }[d.type];
     const id = 'new' + (++this.seq);
     const sub = type === 'agent' ? 'agent · idle' : type === 'serial' ? d.host + ' · ' + d.baud + ' ' + d.dataBits + (d.parity === 'None' ? 'N' : d.parity[0]) + d.stopBits : type === 'local' ? (d.host || 'zsh') + ' · ~' : d.host + ':' + d.port;
-    const sess = { id, name, host: name, sub, type, group: d.group || 'Sessions', live: true, access: 'allowed', ping: '—', addr: d.host, port: d.port || '22', user: d.user || '' };
-    // Connect directly with the entered host/user — the real ssh client prompts
-    // for the password (and host key) right in the terminal. No credential picker.
-    this.setState(s => ({ sessions: s.sessions.concat(sess), dialogOpen: false }), () => this.openSession(id));
+    // Credentials come from a picked OneKey, or the username/password fields.
+    let user = d.user || '', pass = d.pass || '';
+    if (d.oneKey) { const k = this.state.oneKeys.find(x => x.id === d.oneKey); if (k) { user = k.user; pass = k.pass || ''; } }
+    const sess = { id, name, host: name, sub, type, group: d.group || 'Sessions', live: true, access: 'allowed', ping: '—', addr: d.host, port: d.port || '22', user, pass };
+    // The stored password is sent automatically when ssh prompts (see onPtyData);
+    // leave it blank to type it in the terminal instead.
+    this.setState(s => {
+      let oneKeys = s.oneKeys;
+      if (type === 'ssh' && d.saveKey && user && !d.oneKey) {
+        oneKeys = s.oneKeys.concat({ id: 'k' + (++this.seq), name: user + '@' + (d.host || name), user, pass, pwOn: !!pass });
+        this.persistOneKeys(oneKeys);
+      }
+      const dlg = Object.assign({}, s.dlg, { host: '', user: '', pass: '', label: '', oneKey: '', saveKey: false });
+      return { sessions: s.sessions.concat(sess), oneKeys, dialogOpen: false, dlg };
+    }, () => this.openSession(id));
+  }
+
+  persistOneKeys(list) {
+    try { localStorage.setItem('wireline-onekeys-v1', JSON.stringify(list || this.state.oneKeys)); } catch (e) {}
   }
 
   renderVals() {
@@ -2158,6 +2243,7 @@ class Component extends DCLogic {
       ]},
       { label: 'Tool', build: (m) => [
         m('Sync Input…', null, 'Ctrl+Shift+M'),
+        m('OneKeys…', () => this.setState({ oneKeyOpen: true }), 'Ctrl+T, Ctrl+K'),
         m('Triggers…', null, 'Ctrl+T, Ctrl+T'),
         m('Tunnels…', null, 'Ctrl+T, Ctrl+U'),
         DIV,
@@ -2328,6 +2414,8 @@ class Component extends DCLogic {
       quote: m.quote || '',
       ff: m.mono ? 'ui-monospace,Menlo,monospace' : 'inherit',
       metaC: m.ok === false ? 'var(--color-accent-2-700)' : 'var(--color-neutral-600)',
+      hasRun: !!m.runCmd,
+      runInTerm: () => { this.writeToPty(m.runCmd + '\n'); },
       approve: () => this.approve(m.id),
       skip: () => this.skip(m.id)
     }));
@@ -2396,7 +2484,7 @@ class Component extends DCLogic {
     return {
       // OneKey manager
       oneKeyOpen: st.oneKeyOpen,
-      closeOneKey: () => this.setState({ oneKeyOpen: false }),
+      closeOneKey: () => { this.persistOneKeys(); this.setState({ oneKeyOpen: false }); },
       openOneKeyMgr: () => this.setState({ oneKeyOpen: true, pickerOpen: false }),
       okTabs, okList,
       okUser: activeKeyObj.user, onOkUser: setKeyField('user'),
@@ -2413,9 +2501,9 @@ class Component extends DCLogic {
         { system: 'Agent', file: '(none selected)', fileC: 'var(--color-neutral-500)' }
       ],
       okAdd: () => { const id = 'k' + (++this.seq); this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name: 'new-onekey', user: 'user', pass: '', pwOn: true }), activeKey: id })); },
-      okRemove: () => this.setState(s => { const rest = s.oneKeys.filter(k => k.id !== s.activeKey); return { oneKeys: rest, activeKey: rest[0] ? rest[0].id : null }; }),
+      okRemove: () => this.setState(s => { const rest = s.oneKeys.filter(k => k.id !== s.activeKey); this.persistOneKeys(rest); return { oneKeys: rest, activeKey: rest[0] ? rest[0].id : null }; }),
       okDuplicate: () => this.setState(s => { const src = s.oneKeys.find(k => k.id === s.activeKey); if (!src) return {}; const id = 'k' + (++this.seq); return { oneKeys: s.oneKeys.concat(Object.assign({}, src, { id, name: src.name + '-copy' })), activeKey: id }; }),
-      saveOneKey: () => this.setState({ oneKeyOpen: false }),
+      saveOneKey: () => { this.persistOneKeys(); this.setState({ oneKeyOpen: false }); },
       // login dialog
       pickerOpen: st.pickerOpen, pickerHost: st.pickerHost,
       closePicker: () => this.setState({ pickerOpen: false, pendingSession: null }),
@@ -2959,6 +3047,9 @@ class Component extends DCLogic {
       dlgHost: st.dlg.host, onDlgHost: setDlg('host'), onDlgHostSel: setDlg('host'),
       dlgPort: st.dlg.port, onDlgPort: setDlg('port'),
       dlgUser: st.dlg.user, onDlgUser: setDlg('user'),
+      dlgPass: st.dlg.pass, onDlgPass: setDlg('pass'),
+      dlgSaveKey: st.dlg.saveKey, onDlgSaveKey: () => this.setState(s => ({ dlg: Object.assign({}, s.dlg, { saveKey: !s.dlg.saveKey }) })),
+      hasOneKeys: st.oneKeys.length > 0,
       dlgGroup: st.dlg.group, onDlgGroup: setDlg('group'),
       dlgLabel: st.dlg.label, onDlgLabel: setDlg('label'),
       dlgBaud: st.dlg.baud, onDlgBaud: setDlg('baud'),

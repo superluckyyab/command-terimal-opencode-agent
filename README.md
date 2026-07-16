@@ -31,6 +31,31 @@ OpenSSH; on Unix it uses your `ssh`). The terminal follows the active tab:
 Ceiling (future work): one live PTY at a time — switching tabs reconnects, so
 background sessions don't persist yet. Serial/Telnet transports aren't wired.
 
+### Credentials
+
+New Session takes **username + password**, or a saved **OneKey** (name / user /
+password, stored in `localStorage`, managed via **Tool → OneKeys…**, or tick
+"Save these credentials as a OneKey"). A stored password is sent automatically
+when ssh prompts for it; leave it blank to type it in the terminal.
+
+### Terminal extras
+
+- **Sender** (timed data sending) writes to the live PTY, so lines actually
+  reach the shell/host.
+- **IP quick-color**: IPv4 addresses in normal output are highlighted (WindTerm
+  style). On by default (`ipColor`).
+- **Drag & drop** an OS file onto the window → its path is pasted into the
+  terminal (useful for local shells; for uploads see below).
+- **AI Operator** reads the current terminal output as context, and can run
+  commands in the real terminal — approved playbook steps execute in the PTY,
+  and a model reply with a fenced command shows a **▶ Run in terminal** button.
+
+### Not yet: rz / sz (zmodem)
+
+Typing `rz`/`sz` on the remote needs a local zmodem implementation (binary
+channel + file dialogs). That's a dedicated feature, deliberately not bundled
+here yet to avoid shipping it unverified. Planned next.
+
 ## AI Operator
 
 - **No key configured** → the Operator runs the built-in scripted playbooks
