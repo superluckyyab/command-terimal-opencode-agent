@@ -1261,9 +1261,39 @@ class Component extends DCLogic {
   // Real terminal: xterm.js (the same engine Tabby uses) bound to a native PTY
   // over Tauri commands. Only runs inside the desktop app (window.__TAURI__);
   // in a plain browser it stays dormant and the scripted terminal shows instead.
-  // ponytail: one shared local shell (id 'main'); per-tab shells + SSH are future work.
+  // The single xterm follows the active tab: an SSH session (with a real address)
+  // runs the OS `ssh` client through the PTY; anything else runs the local shell.
+  // ponytail: one live PTY at a time (reconnects on tab switch); persistent
+  // per-tab sessions + serial/telnet transports are future work.
   xtermAvailable() {
     return !!(window.__TAURI__ && typeof window.Terminal !== 'undefined');
+  }
+
+  // ssh command for a real user-created SSH session; null → local default shell.
+  sshSpecFor(sess) {
+    if (!sess || sess.type !== 'ssh' || !sess.addr) return null;
+    const args = [];
+    if (sess.port && String(sess.port) !== '22') args.push('-p', String(sess.port));
+    // accept-new: trust a host's key on first connect (still rejects a changed key)
+    args.push('-o', 'StrictHostKeyChecking=accept-new');
+    args.push((sess.user ? sess.user + '@' : '') + sess.addr);
+    return { program: 'ssh', args };
+  }
+
+  connectSession(sess) {
+    if (!this.xterm || !window.__TAURI__) return;
+    const invoke = window.__TAURI__.invoke;
+    const term = this.xterm;
+    if (this.xtermId) invoke('pty_kill', { id: this.xtermId }).catch(() => {});
+    const spec = this.sshSpecFor(sess);
+    const id = 'pty:' + (sess ? sess.id : 'shell') + ':' + (++this.seq);
+    this.xtermId = id;
+    this.xtermSessId = sess ? sess.id : null;
+    try { term.reset(); } catch (e) {}
+    if (spec) term.write('Connecting to ' + (sess.user ? sess.user + '@' : '') + sess.addr + (sess.port && String(sess.port) !== '22' ? ':' + sess.port : '') + ' …\r\n');
+    const payload = { id, cols: term.cols || 80, rows: term.rows || 24 };
+    if (spec) { payload.program = spec.program; payload.args = spec.args; }
+    invoke('pty_spawn', payload).catch(err => term.write('\r\n[spawn failed: ' + err + ']\r\n'));
   }
 
   initXterm() {
@@ -1284,22 +1314,21 @@ class Component extends DCLogic {
     term.open(host);
     try { if (fit) fit.fit(); } catch (e) {}
     this.xterm = term; this.xtermFit = fit;
-    const id = 'main'; this.xtermId = id;
-    invoke('pty_spawn', { id, cols: term.cols || 80, rows: term.rows || 24 })
-      .catch(err => term.write('\r\n[pty spawn failed: ' + err + ']\r\n'));
-    term.onData(d => { invoke('pty_write', { id, data: d }).catch(() => {}); });
-    term.onResize(({ cols, rows }) => { invoke('pty_resize', { id, cols, rows }).catch(() => {}); });
+    // handlers read this.xtermId dynamically so a reconnect routes to the new PTY
+    term.onData(d => { if (this.xtermId) invoke('pty_write', { id: this.xtermId, data: d }).catch(() => {}); });
+    term.onResize(({ cols, rows }) => { if (this.xtermId) invoke('pty_resize', { id: this.xtermId, cols, rows }).catch(() => {}); });
     if (listen) {
-      listen('pty://data', ev => { const p = ev.payload; if (p && p.id === id) term.write(new Uint8Array(p.data)); }).then(un => { this.xtermUnData = un; });
-      listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === id) term.write('\r\n[process exited]\r\n'); }).then(un => { this.xtermUnExit = un; });
+      listen('pty://data', ev => { const p = ev.payload; if (p && p.id === this.xtermId) term.write(new Uint8Array(p.data)); }).then(un => { this.xtermUnData = un; });
+      listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === this.xtermId) term.write('\r\n[process exited]\r\n'); }).then(un => { this.xtermUnExit = un; });
     }
     this.xtermResize = () => { try { if (this.xtermFit) this.xtermFit.fit(); } catch (e) {} };
     window.addEventListener('resize', this.xtermResize);
     setTimeout(this.xtermResize, 60);
+    this.connectSession(this.sess(this.state.activeTab));
   }
 
   // Keep the xterm element attached to the current host (survives view switches),
-  // and (re)create it when the workbench remounts the host.
+  // and reconnect the PTY when the active tab changes to a different session.
   syncXterm() {
     if (!this.xtermAvailable()) return;
     const host = this.xtermHostRef.current;
@@ -1309,6 +1338,9 @@ class Component extends DCLogic {
       host.appendChild(this.xterm.element);
       this.xtermResize && this.xtermResize();
     }
+    const active = this.sess(this.state.activeTab);
+    const activeId = active ? active.id : null;
+    if (activeId !== this.xtermSessId) this.connectSession(active);
   }
 
   cleanupXterm() {
@@ -1659,6 +1691,7 @@ class Component extends DCLogic {
 
   applyKeyToSession(sess, key) {
     const id = sess.id;
+    if (!sess.user && key && key.user) sess.user = key.user;
     this.setState(s => ({
       sessions: s.sessions.concat(sess),
       pickerOpen: false, pendingSession: null,
@@ -1683,7 +1716,7 @@ class Component extends DCLogic {
   quickConnect(host) {
     host = (host || '').trim(); if (!host) return;
     const id = 'qc' + (++this.seq);
-    const sess = { id, name: host, host, sub: host + ' \u00b7 ssh', type: 'ssh', group: 'Quick', live: true, access: 'allowed', ping: '\u2014' };
+    const sess = { id, name: host, host, sub: host + ' \u00b7 ssh', type: 'ssh', group: 'Quick', live: true, access: 'allowed', ping: '\u2014', addr: host, port: '22', user: '' };
     const saved = this.state.autoLogins[host];
     if (saved) { this.setState({ qcHost: '' }); this.applyKeyToSession(sess, saved); return; }
     this.setState({ qcHost: '', pickerOpen: true, pickerHost: host, pendingSession: sess, login: { tab: 'onekey', keyId: '', user: '', pass: '', auto: false } });
@@ -2032,7 +2065,7 @@ class Component extends DCLogic {
     const type = { 'SSH': 'ssh', 'Serial': 'serial', 'Telnet': 'telnet', 'Local': 'local', 'AI Agent': 'agent' }[d.type];
     const id = 'new' + (++this.seq);
     const sub = type === 'agent' ? 'agent · idle' : type === 'serial' ? d.host + ' · ' + d.baud + ' ' + d.dataBits + (d.parity === 'None' ? 'N' : d.parity[0]) + d.stopBits : type === 'local' ? (d.host || 'zsh') + ' · ~' : d.host + ':' + d.port;
-    const sess = { id, name, host: name, sub, type, group: d.group || 'Lab', live: true, access: d.agent ? 'allowed' : 'blocked', ping: '—' };
+    const sess = { id, name, host: name, sub, type, group: d.group || 'Lab', live: true, access: d.agent ? 'allowed' : 'blocked', ping: '—', addr: d.host, port: d.port || '22', user: d.user || '' };
     if (type === 'ssh') {
       const chosen = d.oneKey && this.state.oneKeys.find(k => k.id === d.oneKey);
       if (chosen) { this.setState({ dialogOpen: false }); this.applyKeyToSession(sess, chosen); return; }

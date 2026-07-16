@@ -41,6 +41,8 @@ fn pty_spawn(
     id: String,
     cols: u16,
     rows: u16,
+    program: Option<String>,
+    args: Option<Vec<String>>,
     app: tauri::AppHandle,
     state: State<PtyState>,
 ) -> Result<(), String> {
@@ -61,7 +63,19 @@ fn pty_spawn(
         })
         .map_err(|e| e.to_string())?;
 
-    let mut cmd = CommandBuilder::new(default_shell());
+    // program set (e.g. "ssh") → run it directly; otherwise the default shell.
+    let mut cmd = match program {
+        Some(p) if !p.is_empty() => {
+            let mut c = CommandBuilder::new(p);
+            if let Some(a) = args {
+                for x in a {
+                    c.arg(x);
+                }
+            }
+            c
+        }
+        _ => CommandBuilder::new(default_shell()),
+    };
     if !cfg!(windows) {
         cmd.env("TERM", "xterm-256color");
     }

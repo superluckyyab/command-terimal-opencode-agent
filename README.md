@@ -15,9 +15,20 @@ shell (`cmd.exe` on Windows, `$SHELL` on Unix). In a plain browser (no Tauri)
 the app falls back to the scripted demo terminal, so the design preview keeps
 working.
 
-Scope: one shared local shell for now. Per-tab shells and real remote SSH
-(the session types in the tree) are future work — they need an SSH stack, which
-`portable-pty` does not provide.
+### SSH
+
+Real SSH works by running the OS `ssh` client inside the PTY (Windows 10/11 ship
+OpenSSH; on Unix it uses your `ssh`). The terminal follows the active tab:
+
+- Open a **New Session → SSH** with a real **host / port / user** (and pick a
+  credential if you like) → the terminal runs `ssh [-p port] user@host` and you
+  get a real, interactive session (password / host-key prompts happen right in
+  the terminal; key auth uses your `~/.ssh`).
+- The built-in demo sessions (`web-01`, …) have no real address, so they open a
+  local shell instead — create your own session to actually connect.
+
+Ceiling (future work): one live PTY at a time — switching tabs reconnects, so
+background sessions don't persist yet. Serial/Telnet transports aren't wired.
 
 ## AI Operator
 
