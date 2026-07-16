@@ -1200,8 +1200,8 @@ class Component extends DCLogic {
         { label: 'Service restarts on Production group', on: true },
         { label: 'Outbound network calls — curl, wget, scp', on: false }
       ],
-      model: 'claude-sonnet-4',
-      models: ['claude-sonnet-4', 'claude-opus-4', 'gpt-4o', 'deepseek-v3', 'qwen-max'],
+      model: 'opencode',
+      models: ['opencode', 'claude-sonnet-4', 'claude-opus-4', 'gpt-4o', 'deepseek-v3', 'qwen-max'],
       recDirListOn: false,
       termSel: 0,
       termSuggHide: false,
@@ -1952,6 +1952,39 @@ class Component extends DCLogic {
     this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'op', text, mono: !!mono, runCmd: runCmd || '' }) }));
   }
 
+  // Drive the installed `opencode` CLI (opencode run --auto), feeding it the
+  // current terminal output + recent chat via stdin, and showing its reply.
+  // opencode reads our terminal (context) and can push commands back to it
+  // (fenced command → "Run in terminal" button). Needs opencode on the machine.
+  async askOpencode(sessName) {
+    if (!window.__TAURI__) { this.setState({ thinking: false }); this.opSay('opencode 需要在桌面应用中运行(浏览器预览下不可用)。', true); return; }
+    const invoke = window.__TAURI__.invoke;
+    const scroll = this.terminalText();
+    const history = this.state.chat
+      .filter(m => (m.kind === 'user' || m.kind === 'op') && m.text)
+      .slice(-8)
+      .map(m => (m.kind === 'user' ? 'User: ' : 'Assistant: ') + m.text)
+      .join('\n');
+    let prompt = 'You are an operations assistant attached to the terminal session "' + sessName + '".\n';
+    if (scroll && scroll.trim()) prompt += '\nCurrent terminal output (most recent last):\n' + scroll.slice(-3000) + '\n';
+    prompt += '\nConversation so far:\n' + history + '\n\nAnswer the latest user message. Put any shell command to run on its own line in a fenced code block.';
+    try {
+      const res = await invoke('run_command', { program: 'opencode', args: ['run', '--auto'], input: prompt, cwd: null });
+      this.setState({ thinking: false });
+      let out = (res && res.stdout && res.stdout.trim()) ? res.stdout : ((res && res.stderr) || '(opencode 无输出)');
+      out = out.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
+      if (res && res.code !== 0 && !(res.stdout && res.stdout.trim())) {
+        this.opSay('opencode 退出码 ' + res.code + ':\n' + out + '\n\n请确认已安装并登录 opencode。', true);
+        return;
+      }
+      const mm = out.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
+      this.opSay(out || '(空回复)', false, mm ? mm[1].trim() : '');
+    } catch (e) {
+      this.setState({ thinking: false });
+      this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认机器上已安装 opencode(例如 `npm i -g opencode-ai`)并已 `opencode auth login`。', true);
+    }
+  }
+
   // Real model call over an OpenAI-compatible endpoint (see Settings → API base URL / key).
   // When no endpoint is configured, sendAI falls back to the built-in scripted playbooks.
   async askModel(sessName) {
@@ -2099,6 +2132,7 @@ class Component extends DCLogic {
         this.opSay('Using @' + mcp.name + ' MCP → ' + (atM[2] || 'ready') + '\n\n' + (mcp.name === 'kubernetes' ? 'kubectl get pods -n prod — 3 running, 0 pending. Deployment app-backend is healthy at rev 2.4.1.' : mcp.name === 'prometheus' ? 'query: rate(http_requests_total{code=~"5.."}[5m]) → 0.02/s and falling since the restart.' : mcp.name === 'github' ? 'Latest release v2.4.1 · 3 open PRs · CI green on main.' : 'Listed /var/log on web-01 — nginx/, journal/, audit/. Ready for file ops.'));
         return;
       }
+      if (this.state.model === 'opencode') { this.askOpencode(sessName); return; }
       if (this.state.apiBase && this.state.apiKey) { this.askModel(sessName); return; }
       const pb = this.playbookFor(quote ? quote + ' ' + text : text, sessName);
       const plan = quote ? 'Looking at the output you referenced — ' + pb.plan : pb.plan;

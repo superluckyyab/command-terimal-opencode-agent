@@ -176,11 +176,66 @@ fn dirs_home() -> Option<std::path::PathBuf> {
         .map(std::path::PathBuf::from)
 }
 
+#[derive(Clone, Serialize)]
+struct CmdOut {
+    code: i32,
+    stdout: String,
+    stderr: String,
+}
+
+// Run a process to completion, feeding `input` on stdin (so we avoid shell
+// quoting), returning its output. Used to drive the installed `opencode` CLI.
+#[tauri::command]
+fn run_command(
+    program: String,
+    args: Vec<String>,
+    input: Option<String>,
+    cwd: Option<String>,
+) -> Result<CmdOut, String> {
+    use std::process::{Command, Stdio};
+    let mut cmd = if cfg!(windows) {
+        // npm-global CLIs are .cmd shims on Windows → run through cmd.exe
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg(&program);
+        c.args(&args);
+        c
+    } else {
+        let mut c = Command::new(&program);
+        c.args(&args);
+        c
+    };
+    match cwd {
+        Some(d) if !d.is_empty() => {
+            cmd.current_dir(d);
+        }
+        _ => {
+            if let Some(home) = dirs_home() {
+                cmd.current_dir(home);
+            }
+        }
+    }
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+    if let Some(inp) = input {
+        if let Some(mut si) = child.stdin.take() {
+            let _ = si.write_all(inp.as_bytes());
+        }
+    }
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    Ok(CmdOut {
+        code: out.status.code().unwrap_or(-1),
+        stdout: String::from_utf8_lossy(&out.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&out.stderr).to_string(),
+    })
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(PtyState::default())
         .invoke_handler(tauri::generate_handler![
-            pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill
+            pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill, run_command
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -65,12 +65,18 @@ picker — both are WebView2 features on Windows.
 
 ## AI Operator
 
-- **No key configured** → the Operator runs the built-in scripted playbooks
-  (the demo experience).
-- **API base URL + key set** (Settings → *AI Operator settings*) → the Operator
-  talks to a real **OpenAI-compatible** endpoint (`{base}/chat/completions`):
-  OpenAI, DeepSeek, Qwen, a local Ollama/LM Studio, etc. The key is stored only
-  in `localStorage` on the machine.
+Pick the engine from the model dropdown in the Operator panel:
+
+- **`opencode`** (default) → drives the **`opencode` CLI installed on the
+  machine** (`opencode run --auto`). The current terminal output and recent chat
+  are piped to it as context, and a command in its reply gets a **▶ Run in
+  terminal** button — so opencode reads and writes your terminal. Requires
+  `opencode` installed and authenticated (`npm i -g opencode-ai`,
+  `opencode auth login`). `--auto` auto-approves opencode's own tool use.
+- **An OpenAI-compatible model** → set API base URL + key in Settings; the
+  Operator calls `{base}/chat/completions` (OpenAI, DeepSeek, Qwen, local
+  Ollama/LM Studio…). Key stored only in `localStorage`.
+- **Otherwise** → built-in scripted playbooks (the demo experience).
 
 ## Build a Windows green (portable) build via GitHub Actions
 
