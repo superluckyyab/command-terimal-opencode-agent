@@ -189,6 +189,43 @@ struct CmdOut {
     stderr: String,
 }
 
+// GUI apps on macOS/Linux inherit a minimal PATH (no /usr/local/bin etc.), so a
+// bare program name like `opencode` won't resolve when launched from Finder.
+// Search PATH plus the usual install locations and return an absolute path.
+#[cfg(not(windows))]
+fn resolve_program(program: &str) -> String {
+    if program.contains('/') {
+        return program.to_string();
+    }
+    let mut dirs: Vec<std::path::PathBuf> = std::env::var("PATH")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .collect();
+    for d in ["/usr/local/bin", "/opt/homebrew/bin", "/usr/bin", "/bin"] {
+        dirs.push(std::path::PathBuf::from(d));
+    }
+    if let Some(home) = dirs_home() {
+        for d in [
+            ".opencode/bin",
+            ".local/bin",
+            ".bun/bin",
+            ".npm-global/bin",
+            ".cargo/bin",
+        ] {
+            dirs.push(home.join(d));
+        }
+    }
+    for d in dirs {
+        let p = d.join(program);
+        if p.is_file() {
+            return p.to_string_lossy().into_owned();
+        }
+    }
+    program.to_string()
+}
+
 // Run a process to completion, feeding `input` on stdin (so we avoid shell
 // quoting), returning its output. Used to drive the installed `opencode` CLI.
 #[tauri::command]
@@ -206,8 +243,30 @@ fn run_command(
         c.args(&args);
         c
     } else {
-        let mut c = Command::new(&program);
+        #[cfg(not(windows))]
+        let resolved = resolve_program(&program);
+        #[cfg(windows)]
+        let resolved = program.clone();
+        let mut c = Command::new(&resolved);
         c.args(&args);
+        // make sure the child (and its own subprocesses, e.g. node) can find
+        // tools in the usual install dirs even under the Finder-launched PATH
+        let base = std::env::var("PATH").unwrap_or_default();
+        let mut extra = String::from("/usr/local/bin:/opt/homebrew/bin");
+        if let Some(home) = dirs_home() {
+            for d in [".opencode/bin", ".local/bin", ".bun/bin", ".npm-global/bin"] {
+                extra.push(':');
+                extra.push_str(&home.join(d).to_string_lossy());
+            }
+        }
+        c.env(
+            "PATH",
+            if base.is_empty() {
+                extra
+            } else {
+                format!("{}:{}", base, extra)
+            },
+        );
         c
     };
     match cwd {
