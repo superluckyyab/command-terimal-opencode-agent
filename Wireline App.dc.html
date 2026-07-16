@@ -1297,10 +1297,12 @@ class Component extends DCLogic {
     const T = window.__TAURI__;
     const invoke = T.invoke;
     const listen = T.event && T.event.listen;
+    host.style.paddingLeft = '80px'; // reserve room for the timestamp/line-number gutter
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       fontSize: 13,
       cursorBlink: true,
+      scrollback: 5000,
       theme: { background: '#1b1a19', foreground: '#e8e5e3', cursor: '#3fb5d6' }
     });
     let fit = null;
@@ -1309,6 +1311,20 @@ class Component extends DCLogic {
     term.open(host);
     try { if (fit) fit.fit(); } catch (e) {}
     this.xterm = term; this.xtermFit = fit;
+    // WindTerm-style gutter: timestamp + running line number, aligned to xterm rows
+    try {
+      this._lineTs = {}; this._totalLines = 0;
+      this.xtermGutter = document.createElement('div');
+      this.xtermGutter.style.cssText = 'position:absolute;left:0;top:0;width:78px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
+      host.appendChild(this.xtermGutter);
+      term.onLineFeed(() => {
+        this._totalLines++;
+        this._lineTs[this._totalLines] = new Date().toTimeString().slice(0, 8);
+        if (this._totalLines % 500 === 0) { const cut = this._totalLines - 6000; for (const k in this._lineTs) if (+k < cut) delete this._lineTs[k]; }
+      });
+      term.onRender(() => this.renderGutter());
+      term.onScroll(() => this.renderGutter());
+    } catch (e) { this.xtermGutter = null; }
     // zmodem sentry: intercepts rz/sz transfers in the PTY byte stream
     this.zsentry = null;
     if (window.Zmodem && window.Zmodem.Sentry) {
@@ -1469,6 +1485,35 @@ class Component extends DCLogic {
 
   terminalText() { return this._scroll || ''; }
 
+  // Draw the timestamp + line-number gutter, aligned to xterm's rendered rows.
+  renderGutter() {
+    const term = this.xterm, gutter = this.xtermGutter, host = this.xtermHostRef.current;
+    if (!term || !gutter || !host) return;
+    if (!this.state.tsMargin) { if (gutter.innerHTML) gutter.innerHTML = ''; return; }
+    try {
+      const rowsEl = term.element && term.element.querySelector('.xterm-rows');
+      if (!rowsEl || !rowsEl.children.length) return;
+      const rrect = rowsEl.getBoundingClientRect(), hrect = host.getBoundingClientRect();
+      const offY = rrect.top - hrect.top;
+      const buf = term.buffer.active, viewportY = buf.viewportY, blen = buf.length, total = this._totalLines || 0;
+      const kids = rowsEl.children;
+      let html = '';
+      for (let i = 0; i < kids.length; i++) {
+        const k = kids[i];
+        const absA = viewportY + i;
+        if (absA >= blen) continue;
+        const g = total - blen + 1 + absA;
+        if (g <= 0) continue;
+        const ts = this._lineTs[g] || '';
+        const top = offY + k.offsetTop, h = k.offsetHeight;
+        html += '<div style="position:absolute;top:' + top + 'px;right:5px;height:' + h + 'px;line-height:' + h + 'px;white-space:nowrap">'
+          + (ts ? '<span style="color:#5f5b59">[' + ts + ']</span> ' : '')
+          + '<span style="color:#3fb5d6;opacity:.75">' + g + '</span></div>';
+      }
+      gutter.innerHTML = html;
+    } catch (e) {}
+  }
+
   // Find in the real terminal via the xterm search addon.
   xtermFind(forward) {
     if (!this.xtermSearch || !this.xterm) return false;
@@ -1498,6 +1543,7 @@ class Component extends DCLogic {
     const active = this.sess(this.state.activeTab);
     const activeId = active ? active.id : null;
     if (activeId !== this.xtermSessId) this.connectSession(active);
+    this.renderGutter();
   }
 
   cleanupXterm() {
