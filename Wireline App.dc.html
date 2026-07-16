@@ -1303,6 +1303,18 @@ class Component extends DCLogic {
     term.open(host);
     try { if (fit) fit.fit(); } catch (e) {}
     this.xterm = term; this.xtermFit = fit;
+    // zmodem sentry: intercepts rz/sz transfers in the PTY byte stream
+    this.zsentry = null;
+    if (window.Zmodem && window.Zmodem.Sentry) {
+      try {
+        this.zsentry = new window.Zmodem.Sentry({
+          to_terminal: (octets) => this.termWriteOut(octets),
+          sender: (octets) => this.writeBytesToPty(octets),
+          on_retract: () => {},
+          on_detect: (detection) => this.onZmodem(detection)
+        });
+      } catch (e) { this.zsentry = null; }
+    }
     // handlers read this.xtermId dynamically so a reconnect routes to the new PTY
     term.onData(d => { if (this.xtermId) invoke('pty_write', { id: this.xtermId, data: d }).catch(() => {}); });
     term.onResize(({ cols, rows }) => { if (this.xtermId) invoke('pty_resize', { id: this.xtermId, cols, rows }).catch(() => {}); });
@@ -1321,21 +1333,73 @@ class Component extends DCLogic {
     this.connectSession(this.sess(this.state.activeTab));
   }
 
-  // All PTY output flows through here: keep a rolling capture for the AI to read,
-  // auto-answer the ssh password prompt, and optionally quick-color IPs.
+  // PTY output is fed to the zmodem Sentry first (so rz/sz transfers are caught);
+  // non-transfer bytes pass through to termWriteOut via the Sentry's to_terminal.
   onPtyData(bytes) {
+    if (!this.xterm) return;
+    if (this.zsentry) {
+      try { this.zsentry.consume(new Uint8Array(bytes)); return; } catch (e) {}
+    }
+    this.termWriteOut(bytes);
+  }
+
+  // Actual terminal write: rolling capture for the AI, ssh password auto-answer,
+  // and optional IPv4 quick-color.
+  termWriteOut(octets) {
     const term = this.xterm; if (!term) return;
+    const u8 = octets instanceof Uint8Array ? octets : new Uint8Array(octets);
     let text = '';
-    try { text = new TextDecoder().decode(new Uint8Array(bytes)); } catch (e) {}
+    try { text = new TextDecoder().decode(u8); } catch (e) {}
     this._scroll = ((this._scroll || '') + text).slice(-8000);
     if (!this._pwSent && this._pendPass && /(assword|passphrase|verification code)\s*[:：]?\s*$/i.test(text)) {
       this._pwSent = true;
       const pw = this._pendPass;
       setTimeout(() => this.writeToPty(pw + '\n'), 120);
     }
+    // colorize only clean, digit-bearing ASCII-ish chunks; otherwise write raw
+    // bytes so xterm reassembles split multibyte (e.g. CJK) sequences correctly.
     const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
-    if (this.state.ipColor && inNormal && text) term.write(this.ipColorize(text));
-    else term.write(new Uint8Array(bytes));
+    if (this.state.ipColor && inNormal && text && /\d/.test(text) && text.indexOf('�') < 0) term.write(this.ipColorize(text));
+    else term.write(u8);
+  }
+
+  writeBytesToPty(octets) {
+    if (this.xtermId && window.__TAURI__) {
+      window.__TAURI__.invoke('pty_write_bytes', { id: this.xtermId, data: Array.from(octets) }).catch(() => {});
+    }
+  }
+
+  // A zmodem transfer was detected in the stream. `receive` = remote ran sz (we
+  // save files to disk); `send` = remote ran rz (we pick local files to upload).
+  onZmodem(detection) {
+    const term = this.xterm;
+    let zsession;
+    try { zsession = detection.confirm(); } catch (e) { return; }
+    if (zsession.type === 'receive') {
+      zsession.on('offer', (xfer) => {
+        const chunks = [];
+        xfer.on('input', (payload) => chunks.push(new Uint8Array(payload)));
+        xfer.accept().then(() => {
+          try { window.Zmodem.Browser.save_to_disk(chunks, xfer.get_details().name); } catch (e) {}
+        }).catch(() => {});
+      });
+      zsession.on('session_end', () => { try { term.write('\r\n'); } catch (e) {} });
+      try { zsession.start(); } catch (e) {}
+    } else {
+      const input = document.createElement('input');
+      input.type = 'file'; input.multiple = true; input.style.display = 'none';
+      document.body.appendChild(input);
+      const cleanup = () => { try { document.body.removeChild(input); } catch (e) {} };
+      input.addEventListener('change', () => {
+        const files = Array.prototype.slice.call(input.files || []);
+        cleanup();
+        if (!files.length) { try { zsession.close(); } catch (e) {} return; }
+        window.Zmodem.Browser.send_files(zsession, files, { on_progress: () => {} })
+          .then(() => { try { zsession.close(); } catch (e) {} })
+          .catch(() => { try { zsession.close(); } catch (e) {} });
+      });
+      input.click();
+    }
   }
 
   // WindTerm-style quick color: highlight IPv4 addresses. Reset with 39 (default

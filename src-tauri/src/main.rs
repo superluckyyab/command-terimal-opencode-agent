@@ -136,6 +136,16 @@ fn pty_write(id: String, data: String, state: State<PtyState>) -> Result<(), Str
 }
 
 #[tauri::command]
+fn pty_write_bytes(id: String, data: Vec<u8>, state: State<PtyState>) -> Result<(), String> {
+    let mut map = state.0.lock().unwrap();
+    if let Some(s) = map.get_mut(&id) {
+        s.writer.write_all(&data).map_err(|e| e.to_string())?;
+        s.writer.flush().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 fn pty_resize(id: String, cols: u16, rows: u16, state: State<PtyState>) -> Result<(), String> {
     let map = state.0.lock().unwrap();
     if let Some(s) = map.get(&id) {
@@ -170,7 +180,7 @@ fn main() {
     tauri::Builder::default()
         .manage(PtyState::default())
         .invoke_handler(tauri::generate_handler![
-            pty_spawn, pty_write, pty_resize, pty_kill
+            pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

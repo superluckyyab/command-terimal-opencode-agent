@@ -50,11 +50,18 @@ when ssh prompts for it; leave it blank to type it in the terminal.
   commands in the real terminal — approved playbook steps execute in the PTY,
   and a model reply with a fenced command shows a **▶ Run in terminal** button.
 
-### Not yet: rz / sz (zmodem)
+### rz / sz (zmodem)
 
-Typing `rz`/`sz` on the remote needs a local zmodem implementation (binary
-channel + file dialogs). That's a dedicated feature, deliberately not bundled
-here yet to avoid shipping it unverified. Planned next.
+Zmodem transfers work in the terminal via `zmodem.js`: all PTY output is fed
+through a `Zmodem.Sentry`, and a Rust binary channel (`pty_write_bytes`) sends
+transfer bytes back.
+
+- **`sz <file>`** on the remote → the app saves the file(s) to disk.
+- **`rz`** on the remote → a file picker opens; the chosen local file(s) are
+  uploaded.
+
+Note: downloads use the WebView download path and uploads use a native file
+picker — both are WebView2 features on Windows.
 
 ## AI Operator
 
