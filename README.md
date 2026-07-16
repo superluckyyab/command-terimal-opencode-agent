@@ -20,12 +20,13 @@ working.
 Real SSH works by running the OS `ssh` client inside the PTY (Windows 10/11 ship
 OpenSSH; on Unix it uses your `ssh`). The terminal follows the active tab:
 
-- Open a **New Session → SSH** with a real **host / port / user** (and pick a
-  credential if you like) → the terminal runs `ssh [-p port] user@host` and you
-  get a real, interactive session (password / host-key prompts happen right in
-  the terminal; key auth uses your `~/.ssh`).
-- The built-in demo sessions (`web-01`, …) have no real address, so they open a
-  local shell instead — create your own session to actually connect.
+- Open a **New Session → SSH** and enter the **host / port / username** →
+  the terminal runs `ssh [-p port] user@host`. The password and first-connect
+  host-key confirmation are entered right in the terminal; key auth uses your
+  `~/.ssh`. There is no separate credential store — the real `ssh` client
+  handles auth.
+- The app starts with no sessions; the terminal shows a local shell until you
+  create or quick-connect to one.
 
 Ceiling (future work): one live PTY at a time — switching tabs reconnects, so
 background sessions don't persist yet. Serial/Telnet transports aren't wired.

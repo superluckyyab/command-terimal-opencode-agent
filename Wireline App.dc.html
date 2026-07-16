@@ -863,18 +863,12 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           <!-- SSH fields -->
           <sc-if value="{{ dlgIsNet }}" hint-placeholder-val="{{ true }}">
             <div style="display:grid;grid-template-columns:1fr 110px;gap:var(--space-2)">
-              <div class="field" style="margin:0"><label>Host</label><input class="input" type="text" placeholder="[user@]hostname" value="{{ dlgHost }}" onChange="{{ onDlgHost }}"></div>
+              <div class="field" style="margin:0"><label>Host</label><input class="input" type="text" placeholder="hostname or IP" value="{{ dlgHost }}" onChange="{{ onDlgHost }}"></div>
               <div class="field" style="margin:0"><label>Port</label><input class="input" type="text" value="{{ dlgPort }}" onChange="{{ onDlgPort }}"></div>
             </div>
+            <div class="field" style="margin:0"><label>Username</label><input class="input" type="text" placeholder="e.g. root" value="{{ dlgUser }}" onChange="{{ onDlgUser }}"></div>
+            <div style="font-size:11px;color:var(--color-neutral-600)">The password (and host-key confirmation) is entered in the terminal after connecting.</div>
           </sc-if>
-
-          <!-- OneKey (common) -->
-          <div class="field" style="margin:0"><label style="color:var(--color-accent-2-700)">OneKey</label>
-            <select class="input" value="{{ dlgOneKey }}" onChange="{{ onDlgOneKey }}">
-              <option value="">None — ask every time</option>
-              <sc-for list="{{ oneKeyOpts }}" as="ok" hint-placeholder-count="3"><option value="{{ ok.id }}">{{ ok.label }}</option></sc-for>
-            </select>
-          </div>
 
           <!-- Serial fields -->
           <sc-if value="{{ dlgIsSerial }}" hint-placeholder-val="{{ false }}">
@@ -1128,7 +1122,7 @@ class Component extends DCLogic {
       syncInput: false,
       tsMargin: true,
       highlights: [],
-      cmdHistories: { web01: ['systemctl status nginx', 'tail -n 40 /var/log/nginx/error.log', 'df -h', 'free -h', 'ping 10.0.4.30'] },
+      cmdHistories: {},
       cmdHistH: 170,
       senderOpen: false,
       sender: { running: false, fmt: 'text', by: 'line', count: '1', interval: '1.00', target: 'current', data: '', sent: 0 },
@@ -1158,33 +1152,13 @@ class Component extends DCLogic {
         { id: 'q4', label: 'Top by memory', cmd: 'ps aux --sort=-%mem | head' },
         { id: 'q5', label: 'Who is on', cmd: 'w' }
       ],
-      oneKeys: [
-        { id: 'ab', name: 'ab', user: 'ab', pass: 'ab-secret-01', pwOn: true },
-        { id: 'aoboyan', name: 'aoboyan', user: 'aoboyan', pass: 'correct-horse-battery', pwOn: true },
-        { id: 'fk102', name: 'fk102', user: 'fkadmin', pass: 'fk102pass', pwOn: true },
-        { id: 'Fk26', name: 'Fk26', user: 'fk26', pass: 'fk26pass', pwOn: false },
-        { id: 'kaifa', name: 'kaifa', user: 'kaifa', pass: 'kaifa-dev', pwOn: true },
-        { id: 'vgadmin', name: 'vgadmin', user: 'vgadmin', pass: 'vg-admin-9', pwOn: true },
-        { id: 'Zgdky', name: 'Zgdky', user: 'zgdky', pass: 'zgdky-key', pwOn: true }
-      ],
+      oneKeys: [],
       termFont: this.props.terminalFontSize ?? 12.5,
       termLH: this.props.terminalLineHeight ?? 1.2,
-      sessions: [
-        { id: 'web01', name: 'web-01', host: 'web-01', sub: '10.0.4.11 · ssh', type: 'ssh', group: 'Production', live: true, access: 'allowed', ping: '24 ms' },
-        { id: 'dbprod', name: 'db-prod', host: 'db-prod', sub: '10.0.4.30 · ssh', type: 'ssh', group: 'Production', live: true, access: 'blocked', ping: '31 ms' },
-        { id: 'web02', name: 'web-02', host: 'web-02', sub: '10.0.4.12 · ssh', type: 'ssh', group: 'Production', live: false, access: 'allowed', ping: '26 ms' },
-        { id: 'agent1', name: 'deploy-agent', host: 'deploy-agent', sub: 'agent · attached to web-01', type: 'agent', group: 'AI Operators', live: true, access: '—', ping: '—' },
-        { id: 'agent2', name: 'log-triage', host: 'log-triage', sub: 'agent · idle', type: 'agent', group: 'AI Operators', live: false, access: '—', ping: '—' },
-        { id: 'serial1', name: 'bench-router', host: 'bench-router', sub: 'COM3 · 115200 · serial', type: 'serial', group: 'Lab', live: false, access: 'blocked', ping: '—' },
-        { id: 'telnet1', name: 'pdu-rack2', host: 'pdu-rack2', sub: '192.168.9.4 · telnet', type: 'telnet', group: 'Lab', live: false, access: 'blocked', ping: '48 ms' },
-        { id: 'local1', name: 'local shell', host: 'desk', sub: 'zsh · ~', type: 'local', group: 'Lab', live: true, access: 'allowed', ping: '0 ms' }
-      ],
-      openTabs: ['web01', 'dbprod', 'local1'],
-      activeTab: 'web01',
-      buffers: {
-        dbprod: [o('Welcome to db-prod · PostgreSQL 16 · Last login Mon Jul 13 08:02 UTC')],
-        local1: [o('desk zsh · type a command below (try ls, uptime, whoami)')]
-      },
+      sessions: [],
+      openTabs: [],
+      activeTab: null,
+      buffers: {},
       chat: [],
       thinking: false,
       draft: '',
@@ -1220,16 +1194,8 @@ class Component extends DCLogic {
       apiBase: '',
       apiKey: '',
       dialogOpen: false,
-      dlg: { type: 'SSH', host: '10.0.4.13', port: '22', user: 'ops', group: 'Production', label: '', agent: true, oneKey: '', baud: '115200', dataBits: '8', parity: 'None', stopBits: '1', flow: 'None', serialData: 'binary', term: 'xterm-256color', charset: 'UTF-8', desc: '', sftp: true, system: 'linux', sysmon: false }
+      dlg: { type: 'SSH', host: '', port: '22', user: '', group: 'Sessions', label: '', agent: false, oneKey: '', baud: '115200', dataBits: '8', parity: 'None', stopBits: '1', flow: 'None', serialData: 'binary', term: 'xterm-256color', charset: 'UTF-8', desc: '', sftp: true, system: 'linux', sysmon: false }
     };
-    this.state.buffers.web01 = [
-      p('web-01', 'systemctl status nginx'),
-      o('● nginx.service — A high performance web server'),
-      { agent: false, spans: [{ t: '   Active: ', c: TX }, { t: 'active (running)', c: OK }, { t: ' since Mon 2026-07-13 06:41:02 UTC; 3h ago', c: TX }] },
-      p('web-01', 'tail -n 2 /var/log/nginx/error.log'),
-      o('2026/07/13 09:52:18 [error] 1188#0: *4411 connect() failed (111: Connection refused)'),
-      o('2026/07/13 09:52:19 [error] 1188#0: *4413 no live upstreams — upstream: "http://127.0.0.1:8080"')
-    ];
     this.termRef = React.createRef();
     this.chatRef = React.createRef();
     this.termInputRef = React.createRef();
@@ -1718,10 +1684,9 @@ class Component extends DCLogic {
   quickConnect(host) {
     host = (host || '').trim(); if (!host) return;
     const id = 'qc' + (++this.seq);
+    // host may be "user@host" or "host"; ssh handles the user prefix directly
     const sess = { id, name: host, host, sub: host + ' \u00b7 ssh', type: 'ssh', group: 'Quick', live: true, access: 'allowed', ping: '\u2014', addr: host, port: '22', user: '' };
-    const saved = this.state.autoLogins[host];
-    if (saved) { this.setState({ qcHost: '' }); this.applyKeyToSession(sess, saved); return; }
-    this.setState({ qcHost: '', pickerOpen: true, pickerHost: host, pendingSession: sess, login: { tab: 'onekey', keyId: '', user: '', pass: '', auto: false } });
+    this.setState(s => ({ sessions: s.sessions.concat(sess), qcHost: '' }), () => this.openSession(id));
   }
 
   removeQuick(id) { this.setState(s => ({ quickCmds: s.quickCmds.filter(q => q.id !== id) })); }
@@ -1772,7 +1737,6 @@ class Component extends DCLogic {
       { label: 'Toggle AI Operator Panel', fn: () => this.setState(s => ({ aiCollapsed: !s.aiCollapsed })) },
       { label: this.state.syncInput ? 'Sync Input: Off' : 'Sync Input: On', fn: () => this.setState(s => ({ syncInput: !s.syncInput })) },
       { label: this.state.tsMargin ? 'Hide Timestamp Margin' : 'Show Timestamp Margin', fn: () => this.setState(s => ({ tsMargin: !s.tsMargin })) },
-      { label: 'OneKeys…', fn: () => this.setState({ oneKeyOpen: true }) },
       { label: 'Reconnect Session', fn: () => this.reconnect() },
       { label: 'Disconnect Session', fn: () => this.disconnect() },
       { label: 'Duplicate Session', fn: () => this.duplicateSession(this.state.activeTab) },
@@ -2067,15 +2031,9 @@ class Component extends DCLogic {
     const type = { 'SSH': 'ssh', 'Serial': 'serial', 'Telnet': 'telnet', 'Local': 'local', 'AI Agent': 'agent' }[d.type];
     const id = 'new' + (++this.seq);
     const sub = type === 'agent' ? 'agent · idle' : type === 'serial' ? d.host + ' · ' + d.baud + ' ' + d.dataBits + (d.parity === 'None' ? 'N' : d.parity[0]) + d.stopBits : type === 'local' ? (d.host || 'zsh') + ' · ~' : d.host + ':' + d.port;
-    const sess = { id, name, host: name, sub, type, group: d.group || 'Lab', live: true, access: d.agent ? 'allowed' : 'blocked', ping: '—', addr: d.host, port: d.port || '22', user: d.user || '' };
-    if (type === 'ssh') {
-      const chosen = d.oneKey && this.state.oneKeys.find(k => k.id === d.oneKey);
-      if (chosen) { this.setState({ dialogOpen: false }); this.applyKeyToSession(sess, chosen); return; }
-      const saved = this.state.autoLogins[name];
-      if (saved) { this.setState({ dialogOpen: false }); this.applyKeyToSession(sess, saved); return; }
-      this.setState({ dialogOpen: false, pickerOpen: true, pickerHost: name, pendingSession: sess, login: { tab: 'onekey', keyId: '', user: '', pass: '', auto: false } });
-      return;
-    }
+    const sess = { id, name, host: name, sub, type, group: d.group || 'Sessions', live: true, access: 'allowed', ping: '—', addr: d.host, port: d.port || '22', user: d.user || '' };
+    // Connect directly with the entered host/user — the real ssh client prompts
+    // for the password (and host key) right in the terminal. No credential picker.
     this.setState(s => ({ sessions: s.sessions.concat(sess), dialogOpen: false }), () => this.openSession(id));
   }
 
@@ -2130,7 +2088,7 @@ class Component extends DCLogic {
         m('Reconnect Session', () => this.reconnect(), 'Return'),
         DIV,
         m('Open Session…', () => this.setState({ view: 'sessions' }), 'Alt+O'),
-        m('Open Recent', null, '', { sub: flyout(['web-01', 'db-prod', 'deploy-agent']) }),
+        m('Open Recent', null, '', { sub: flyout([]) }),
         DIV,
         m('Save Session', null, 'Ctrl+Shift+S'),
         m('Save Selection As…', null, ''),
@@ -2200,7 +2158,6 @@ class Component extends DCLogic {
       ]},
       { label: 'Tool', build: (m) => [
         m('Sync Input…', null, 'Ctrl+Shift+M'),
-        m('OneKeys…', () => this.setState({ oneKeyOpen: true }), 'Ctrl+T, Ctrl+K'),
         m('Triggers…', null, 'Ctrl+T, Ctrl+T'),
         m('Tunnels…', null, 'Ctrl+T, Ctrl+U'),
         DIV,
