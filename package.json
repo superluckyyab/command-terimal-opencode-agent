@@ -1,6 +1,6 @@
 {
   "name": "wireline",
-  "version": "1.11.1",
+  "version": "1.11.2",
   "private": true,
   "scripts": {
     "build": "node build.js",
