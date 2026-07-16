@@ -1691,7 +1691,9 @@ class Component extends DCLogic {
 
   applyKeyToSession(sess, key) {
     const id = sess.id;
-    if (!sess.user && key && key.user) sess.user = key.user;
+    // the credential picked/entered in the login dialog is authoritative for the
+    // username — it must override any default carried on the session (e.g. 'ops').
+    if (key && key.user) sess.user = key.user;
     this.setState(s => ({
       sessions: s.sessions.concat(sess),
       pickerOpen: false, pendingSession: null,
