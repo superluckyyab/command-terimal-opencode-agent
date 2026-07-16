@@ -335,6 +335,9 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           </span>
         </sc-for>
         <span onClick="{{ addQuick }}" title="Save current command line as a favorite" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border:1px dashed var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600);font-size:14px" style-hover="background:var(--color-neutral-200);border-color:var(--color-accent-400)">+</span>
+        <span onClick="{{ openQuickMgr }}" title="管理快捷命令（分组 / 批量编辑）" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"></circle><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4"></path></svg>
+        </span>
       </div>
 
       <!-- SENDER panel (timed data sending) — hidden until toggled -->
@@ -422,6 +425,9 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         <span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
         Attached to <span class="tag tag-accent" style="font-family:ui-monospace,Menlo,monospace;color:var(--color-text);white-space:nowrap">{{ attachedName }}</span>
         <span style="margin-left:auto;display:flex;gap:3px;align-items:center">
+          <span onClick="{{ clearChat }}" title="新建会话 — 清除当前终端的 AI 对话" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11v7.5h-6l-3 2.5v-2.5h-2z"></path><path d="M8 5.5v3M6.5 7h3"></path></svg>
+          </span>
           <span onClick="{{ toggleTimers }}" title="Schedulers (定时器)" style="position:relative;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ timersIconC }}" style-hover="background:var(--color-neutral-200)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 5v3l2 1.5"></path></svg>
             <sc-if value="{{ timersBadgeOn }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:0px;right:0px;min-width:12px;height:12px;border-radius:6px;background:var(--color-accent-2);color:#fff;font-size:8px;display:grid;place-items:center;padding:0 2px">{{ timersBadge }}</span></sc-if>
@@ -810,6 +816,69 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
     </div>
   </sc-if>
 
+  <!-- ═══ QUICK COMMAND MANAGER (WindTerm style: groups + batch edit) ═══ -->
+  <sc-if value="{{ qmOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" style="z-index:78">
+      <div class="dialog" style="width:820px;max-width:96vw;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh" onClick="{{ stop }}">
+        <!-- group row -->
+        <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100)">
+          <label style="font-size:13px;color:var(--color-neutral-700);flex:none">Group:</label>
+          <select class="input" value="{{ qmGroup }}" onChange="{{ onQmGroup }}" style="width:280px;height:30px;font-size:13px;font-family:ui-monospace,Menlo,monospace">
+            <sc-for list="{{ qmGroups }}" as="qg" hint-placeholder-count="2"><option value="{{ qg.v }}">{{ qg.label }}</option></sc-for>
+          </select>
+          <span onClick="{{ qmAddGroup }}" style="font-size:13px;font-weight:600;cursor:pointer;color:var(--color-text)" style-hover="color:var(--color-accent-700)">Add Group</span>
+          <span onClick="{{ qmRemoveGroup }}" style="font-size:13px;cursor:pointer;color:{{ qmRemoveGroupC }}" style-hover="color:var(--color-text)">Remove Group</span>
+          <span onClick="{{ qmRenameGroup }}" style="font-size:13px;cursor:pointer;color:var(--color-neutral-600)" style-hover="color:var(--color-text)">Rename Group</span>
+          <span onClick="{{ qmCancel }}" title="Close" style="margin-left:auto;cursor:pointer;color:var(--color-neutral-600);font-size:16px" style-hover="color:var(--color-text)">×</span>
+        </div>
+        <div style="display:grid;grid-template-columns:280px 1fr;flex:1;min-height:420px">
+          <!-- left: command list + batch toolbar -->
+          <div style="display:flex;flex-direction:column;border-right:1px solid var(--color-divider);background:var(--color-surface)">
+            <div style="flex:1;overflow-y:auto;padding:4px 0">
+              <sc-if value="{{ qmEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">该分组暂无命令。<br>点击下方 “+” 添加。</div>
+              </sc-if>
+              <sc-for list="{{ qmList }}" as="qi" hint-placeholder-count="6">
+                <div onClick="{{ qi.pick }}" style="padding:7px 14px;font-size:13px;font-family:ui-monospace,Menlo,monospace;font-weight:{{ qi.w }};cursor:pointer;background:{{ qi.bg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:var(--color-neutral-200)">{{ qi.label }}</div>
+              </sc-for>
+            </div>
+            <div style="border-top:1px solid var(--color-divider);display:flex;align-items:center;gap:14px;padding:9px 14px;font-size:12.5px;color:var(--color-neutral-500)">
+              <span onClick="{{ qmAdd }}" title="Add command" style="cursor:pointer;font-size:16px;line-height:1" style-hover="color:var(--color-text)">+</span>
+              <span onClick="{{ qmDel }}" title="Remove selected" style="cursor:pointer;font-size:16px;line-height:1" style-hover="color:var(--color-text)">−</span>
+              <span onClick="{{ qmUp }}" title="Move up" style="cursor:pointer;font-size:11px" style-hover="color:var(--color-text)">▲</span>
+              <span onClick="{{ qmDown }}" title="Move down" style="cursor:pointer;font-size:11px" style-hover="color:var(--color-text)">▼</span>
+              <span onClick="{{ qmDup }}" style="margin-left:auto;cursor:pointer" style-hover="color:var(--color-text)">Duplicate</span>
+            </div>
+          </div>
+          <!-- right: editor -->
+          <div style="padding:16px 20px;display:flex;flex-direction:column;gap:10px;min-height:0">
+            <sc-if value="{{ qmHasSel }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Label:</label>
+                <input class="input" type="text" value="{{ qmLabel }}" onChange="{{ onQmLabel }}" style="height:30px;font-size:13px;font-family:ui-monospace,Menlo,monospace">
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Type:</label>
+                <select class="input" style="height:30px;font-size:13px;width:200px"><option>Send Text</option></select>
+              </div>
+              <div style="display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:start;flex:1;min-height:0">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700);padding-top:7px">Text:</label>
+                <textarea class="input" value="{{ qmText }}" onChange="{{ onQmText }}" placeholder="要发送到终端的命令，可多行" style="height:100%;min-height:260px;resize:none;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5"></textarea>
+              </div>
+            </sc-if>
+            <sc-if value="{{ qmEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px">选择或新建一条命令进行编辑。</div>
+            </sc-if>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:11px 16px;border-top:1px solid var(--color-divider)">
+          <button class="btn btn-secondary" style="min-width:96px" onClick="{{ qmCancel }}">Cancel</button>
+          <button class="btn btn-primary" style="min-width:96px" onClick="{{ qmOk }}">Ok</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- ═══ TAB CONTEXT MENU (WindTerm view menu) ═══ -->
   <sc-if value="{{ tctxOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeTctx }}" onContextMenu="{{ closeTctx }}" style="position:fixed;inset:0;z-index:80">
@@ -854,114 +923,140 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
     </div>
   </sc-if>
 
-  <!-- ═══ NEW SESSION DIALOG ═══ -->
+  <!-- ═══ NEW SESSION DIALOG (WindTerm compact) — closes only via ×/Cancel ═══ -->
   <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
-    <div class="dialog-backdrop" style="z-index:70" onClick="{{ closeDialog }}">
-      <div class="dialog" style="width:560px;padding:0;overflow:hidden" onClick="{{ stop }}">
-        <div class="dialog-title" style="padding:14px 20px 0">New Session</div>
-        <!-- type tabs -->
-        <div style="display:flex;align-items:stretch;gap:2px;padding:10px 20px 0;border-bottom:1px solid var(--color-divider)">
-          <sc-for list="{{ dlgTypes }}" as="tp" hint-placeholder-count="5">
-            <div onClick="{{ tp.pick }}" style="padding:8px 18px;font-size:13px;cursor:pointer;border-bottom:2px solid {{ tp.bc }};color:{{ tp.c }};font-weight:{{ tp.w }}">{{ tp.label }}</div>
+    <div class="dialog-backdrop" style="z-index:70">
+      <div class="dialog" style="width:880px;max-width:96vw;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh" onClick="{{ stop }}">
+        <!-- title -->
+        <div style="display:flex;align-items:center;padding:10px 16px;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100)">
+          <span style="flex:1;text-align:center;font-family:var(--font-heading);font-weight:600;font-size:15px">New Session</span>
+          <span onClick="{{ closeDialog }}" title="Close" style="cursor:pointer;color:var(--color-neutral-600);font-size:16px;line-height:1;padding:2px 6px;border-radius:var(--radius-md)" style-hover="background:var(--color-neutral-200);color:var(--color-text)">×</span>
+        </div>
+        <!-- type tabs (full width, segmented) -->
+        <div style="display:flex;align-items:stretch;background:var(--color-neutral-100);border-bottom:1px solid var(--color-divider)">
+          <sc-for list="{{ dlgTypes }}" as="tp" hint-placeholder-count="4">
+            <div onClick="{{ tp.pick }}" style="flex:1;text-align:center;padding:9px 0;font-size:13px;cursor:pointer;background:{{ tp.bg }};border-bottom:2px solid {{ tp.bc }};border-right:1px solid var(--color-divider);color:{{ tp.c }};font-weight:{{ tp.w }}" style-hover="color:var(--color-text)">{{ tp.label }}</div>
           </sc-for>
         </div>
-        <div style="padding:16px 20px;display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto">
-
-          <!-- SSH fields -->
-          <sc-if value="{{ dlgIsNet }}" hint-placeholder-val="{{ true }}">
-            <div style="display:grid;grid-template-columns:1fr 110px;gap:var(--space-2)">
-              <div class="field" style="margin:0"><label>Host</label><input class="input" type="text" placeholder="hostname or IP" value="{{ dlgHost }}" onChange="{{ onDlgHost }}"></div>
-              <div class="field" style="margin:0"><label>Port</label><input class="input" type="text" value="{{ dlgPort }}" onChange="{{ onDlgPort }}"></div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
-              <div class="field" style="margin:0"><label>Username</label><input class="input" type="text" placeholder="e.g. root" value="{{ dlgUser }}" onChange="{{ onDlgUser }}"></div>
-              <div class="field" style="margin:0"><label>Password</label><input class="input" type="password" placeholder="sent when prompted" value="{{ dlgPass }}" onChange="{{ onDlgPass }}"></div>
-            </div>
-            <sc-if value="{{ hasOneKeys }}" hint-placeholder-val="{{ false }}">
-              <div class="field" style="margin:0"><label>OneKey (saved credential)</label>
-                <select class="input" value="{{ dlgOneKey }}" onChange="{{ onDlgOneKey }}">
-                  <option value="">— none, use the fields above —</option>
+        <div style="display:grid;grid-template-columns:210px 1fr;flex:1;min-height:0">
+          <!-- settings tree (WindTerm style) -->
+          <div style="border-right:1px solid var(--color-divider);background:var(--color-surface);overflow-y:auto;padding:8px 0">
+            <sc-for list="{{ dlgTree }}" as="dt" hint-placeholder-count="10">
+              <div style="display:flex;align-items:center;gap:7px;padding:5px 10px 5px {{ dt.pad }};font-size:12.5px;font-family:ui-monospace,Menlo,monospace;color:{{ dt.c }};background:{{ dt.bg }};white-space:nowrap;user-select:none">
+                <span style="width:9px;font-size:9px;color:var(--color-neutral-500)">{{ dt.arrow }}</span>{{ dt.label }}
+              </div>
+            </sc-for>
+          </div>
+          <!-- compact form: label left, control right -->
+          <div style="padding:16px 22px;overflow-y:auto;display:flex;flex-direction:column;gap:9px">
+            <sc-if value="{{ dlgIsShell }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Shell:</label>
+                <input class="input" type="text" placeholder="zsh / bash / cmd (empty = default)" value="{{ dlgHost }}" onChange="{{ onDlgHost }}" style="height:30px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+              </div>
+            </sc-if>
+            <sc-if value="{{ dlgIsNet }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Host:</label>
+                <input class="input" type="text" placeholder="[user@]hostname" value="{{ dlgHost }}" onChange="{{ onDlgHost }}" style="height:30px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+              </div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Port:</label>
+                <input class="input" type="text" value="{{ dlgPort }}" onChange="{{ onDlgPort }}" style="height:30px;width:120px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+              </div>
+            </sc-if>
+            <sc-if value="{{ dlgIsSSH }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-accent-2-700)">OneKey:</label>
+                <select class="input" value="{{ dlgOneKey }}" onChange="{{ onDlgOneKey }}" style="height:30px;font-size:12.5px">
+                  <option value="">None</option>
                   <sc-for list="{{ oneKeyOpts }}" as="ok" hint-placeholder-count="3"><option value="{{ ok.id }}">{{ ok.label }}</option></sc-for>
                 </select>
               </div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Username:</label>
+                <input class="input" type="text" placeholder="e.g. root — or use a OneKey" value="{{ dlgUser }}" onChange="{{ onDlgUser }}" style="height:30px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+              </div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Password:</label>
+                <input class="input" type="password" placeholder="sent automatically when prompted" value="{{ dlgPass }}" onChange="{{ onDlgPass }}" style="height:30px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+              </div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <span></span>
+                <label class="radio" style="font-size:12px;user-select:none"><input type="checkbox" checked="{{ dlgSaveKey }}" onChange="{{ onDlgSaveKey }}"><span class="dot" style="border-radius:2px"></span>Save these credentials as a OneKey</label>
+              </div>
             </sc-if>
-            <label class="radio" style="font-size:12.5px;user-select:none"><input type="checkbox" checked="{{ dlgSaveKey }}" onChange="{{ onDlgSaveKey }}"><span class="dot" style="border-radius:2px"></span>Save these credentials as a OneKey</label>
-            <div style="font-size:11px;color:var(--color-neutral-600)">Leave the password blank to type it in the terminal instead. Passwords are stored only on this machine.</div>
-          </sc-if>
-
-          <!-- Serial fields -->
-          <sc-if value="{{ dlgIsSerial }}" hint-placeholder-val="{{ false }}">
-            <div class="field" style="margin:0"><label>Serial port</label>
-              <select class="input" value="{{ dlgHost }}" onChange="{{ onDlgHostSel }}">
-                <option value="COM3">COM3</option><option value="COM5">COM5</option>
-                <option value="/dev/ttyUSB0">/dev/ttyUSB0</option><option value="/dev/ttyS0">/dev/ttyS0</option>
-              </select>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:var(--space-2)">
-              <div class="field" style="margin:0"><label>Baud rate</label>
-                <select class="input" value="{{ dlgBaud }}" onChange="{{ onDlgBaud }}">
-                  <option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>230400</option><option>921600</option>
+            <sc-if value="{{ dlgIsSerial }}" hint-placeholder-val="{{ false }}">
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Port:</label>
+                <select class="input" value="{{ dlgHost }}" onChange="{{ onDlgHostSel }}" style="height:30px;font-size:12.5px">
+                  <option value="COM3">COM3</option><option value="COM5">COM5</option>
+                  <option value="/dev/ttyUSB0">/dev/ttyUSB0</option><option value="/dev/ttyS0">/dev/ttyS0</option>
                 </select>
               </div>
-              <div class="field" style="margin:0"><label>Data bits</label>
-                <select class="input" value="{{ dlgDataBits }}" onChange="{{ onDlgDataBits }}"><option>8</option><option>7</option><option>6</option><option>5</option></select>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Baud rate:</label>
+                <div style="display:flex;gap:8px">
+                  <select class="input" value="{{ dlgBaud }}" onChange="{{ onDlgBaud }}" style="height:30px;width:110px;font-size:12.5px"><option>9600</option><option>19200</option><option>38400</option><option>57600</option><option>115200</option><option>230400</option><option>921600</option></select>
+                  <select class="input" value="{{ dlgDataBits }}" onChange="{{ onDlgDataBits }}" title="Data bits" style="height:30px;width:64px;font-size:12.5px"><option>8</option><option>7</option><option>6</option><option>5</option></select>
+                  <select class="input" value="{{ dlgParity }}" onChange="{{ onDlgParity }}" title="Parity" style="height:30px;width:90px;font-size:12.5px"><option>None</option><option>Even</option><option>Odd</option><option>Mark</option><option>Space</option></select>
+                  <select class="input" value="{{ dlgStopBits }}" onChange="{{ onDlgStopBits }}" title="Stop bits" style="height:30px;width:64px;font-size:12.5px"><option>1</option><option>1.5</option><option>2</option></select>
+                </div>
               </div>
-              <div class="field" style="margin:0"><label>Parity</label>
-                <select class="input" value="{{ dlgParity }}" onChange="{{ onDlgParity }}"><option>None</option><option>Even</option><option>Odd</option><option>Mark</option><option>Space</option></select>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Flow control:</label>
+                <div style="display:flex;gap:8px">
+                  <select class="input" value="{{ dlgFlow }}" onChange="{{ onDlgFlow }}" style="height:30px;width:110px;font-size:12.5px"><option>None</option><option>XON/XOFF</option><option>RTS/CTS</option><option>DSR/DTR</option></select>
+                  <select class="input" value="{{ dlgSerialData }}" onChange="{{ onDlgSerialData }}" title="Data mode" style="height:30px;width:90px;font-size:12.5px"><option>binary</option><option>text</option></select>
+                </div>
               </div>
-              <div class="field" style="margin:0"><label>Stop bits</label>
-                <select class="input" value="{{ dlgStopBits }}" onChange="{{ onDlgStopBits }}"><option>1</option><option>1.5</option><option>2</option></select>
-              </div>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
-              <div class="field" style="margin:0"><label>Flow control</label>
-                <select class="input" value="{{ dlgFlow }}" onChange="{{ onDlgFlow }}"><option>None</option><option>XON/XOFF</option><option>RTS/CTS</option><option>DSR/DTR</option></select>
-              </div>
-              <div class="field" style="margin:0"><label>Data</label>
-                <select class="input" value="{{ dlgSerialData }}" onChange="{{ onDlgSerialData }}"><option>binary</option><option>text</option></select>
-              </div>
-            </div>
-          </sc-if>
-
-          <!-- common fields -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-2)">
-            <div class="field" style="margin:0"><label>Label</label><input class="input" type="text" placeholder="web-03" value="{{ dlgLabel }}" onChange="{{ onDlgLabel }}"></div>
-            <div class="field" style="margin:0"><label>Group</label><input class="input" type="text" placeholder="[nesting groups] a>b>c" value="{{ dlgGroup }}" onChange="{{ onDlgGroup }}"></div>
-          </div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--space-2)">
-            <div class="field" style="margin:0"><label>Term</label>
-              <select class="input" value="{{ dlgTerm }}" onChange="{{ onDlgTerm }}"><option>xterm-256color</option><option>xterm</option><option>vt100</option><option>linux</option></select>
-            </div>
-            <div class="field" style="margin:0"><label>System</label>
-              <select class="input" value="{{ dlgSystem }}" onChange="{{ onDlgSystem }}"><option>linux</option><option>cmd</option><option>powershell</option><option>zsh</option></select>
-            </div>
-            <div class="field" style="margin:0"><label>Charset</label>
-              <select class="input" value="{{ dlgCharset }}" onChange="{{ onDlgCharset }}"><option>UTF-8</option><option>GBK</option><option>GB18030</option><option>Latin-1</option></select>
-            </div>
-          </div>
-          <div class="field" style="margin:0"><label>Description</label><textarea class="input" rows="2" value="{{ dlgDesc }}" onChange="{{ onDlgDesc }}"></textarea></div>
-
-          <!-- toggles -->
-          <div style="display:flex;align-items:center;gap:24px">
-            <sc-if value="{{ dlgIsNet }}" hint-placeholder-val="{{ true }}">
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none" onClick="{{ dlgToggleSftp }}">
-                Sftp
-                <span style="width:30px;height:16px;border-radius:9px;background:{{ dlgSftpBg }};position:relative;flex:none"><span style="position:absolute;top:2px;left:{{ dlgSftpKnob }};width:12px;height:12px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
-              </label>
-              <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none" onClick="{{ dlgToggleSysmon }}">
-                Sysmon
-                <span style="width:30px;height:16px;border-radius:9px;background:{{ dlgSysmonBg }};position:relative;flex:none"><span style="position:absolute;top:2px;left:{{ dlgSysmonKnob }};width:12px;height:12px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
-              </label>
             </sc-if>
-            <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;user-select:none" onClick="{{ dlgToggleAgent }}">
-              AI Operator
-              <span style="width:30px;height:16px;border-radius:9px;background:{{ dlgAgentBg }};position:relative;flex:none"><span style="position:absolute;top:2px;left:{{ dlgAgentKnob }};width:12px;height:12px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
-            </label>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Label:</label>
+              <input class="input" type="text" value="{{ dlgLabel }}" onChange="{{ onDlgLabel }}" style="height:30px;font-size:12.5px">
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Group:</label>
+              <input class="input" type="text" placeholder="[nesting groups] a>b>c" value="{{ dlgGroup }}" onChange="{{ onDlgGroup }}" style="height:30px;font-size:12.5px">
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Term:</label>
+              <select class="input" value="{{ dlgTerm }}" onChange="{{ onDlgTerm }}" style="height:30px;font-size:12.5px"><option>xterm-256color</option><option>xterm</option><option>vt100</option><option>linux</option></select>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">System:</label>
+              <select class="input" value="{{ dlgSystem }}" onChange="{{ onDlgSystem }}" style="height:30px;font-size:12.5px"><option>linux</option><option>cmd</option><option>powershell</option><option>zsh</option></select>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Charset:</label>
+              <select class="input" value="{{ dlgCharset }}" onChange="{{ onDlgCharset }}" style="height:30px;font-size:12.5px"><option>UTF-8</option><option>GBK</option><option>GB18030</option><option>Latin-1</option></select>
+            </div>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:start">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700);padding-top:6px">Description:</label>
+              <textarea class="input" rows="4" value="{{ dlgDesc }}" onChange="{{ onDlgDesc }}" style="font-size:12.5px;resize:vertical"></textarea>
+            </div>
+            <sc-if value="{{ dlgIsNet }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Sftp:</label>
+                <span onClick="{{ dlgToggleSftp }}" style="width:34px;height:18px;border-radius:10px;background:{{ dlgSftpBg }};position:relative;cursor:pointer;display:inline-block"><span style="position:absolute;top:2px;left:{{ dlgSftpKnob }};width:14px;height:14px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
+              </div>
+              <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Sysmon:</label>
+                <span onClick="{{ dlgToggleSysmon }}" style="width:34px;height:18px;border-radius:10px;background:{{ dlgSysmonBg }};position:relative;cursor:pointer;display:inline-block"><span style="position:absolute;top:2px;left:{{ dlgSysmonKnob }};width:14px;height:14px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
+              </div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
+              <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">AI Operator:</label>
+              <span onClick="{{ dlgToggleAgent }}" style="width:34px;height:18px;border-radius:10px;background:{{ dlgAgentBg }};position:relative;cursor:pointer;display:inline-block"><span style="position:absolute;top:2px;left:{{ dlgAgentKnob }};width:14px;height:14px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
+            </div>
           </div>
         </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;padding:12px 20px;border-top:1px solid var(--color-divider)">
-          <button class="btn btn-secondary" onClick="{{ closeDialog }}">Cancel</button>
-          <button class="btn btn-primary" onClick="{{ connectDialog }}">Connect</button>
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--color-divider)">
+          <button class="btn btn-secondary" style="font-size:12.5px" onClick="{{ dlgEditDefaults }}">Edit Default Settings...</button>
+          <div style="display:flex;gap:8px;margin-left:auto">
+            <button class="btn btn-secondary" style="min-width:96px" onClick="{{ closeDialog }}">Cancel</button>
+            <button class="btn btn-primary" style="min-width:96px" onClick="{{ connectDialog }}">Connect</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1017,72 +1112,113 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
     </div>
   </sc-if>
 
-  <!-- ═══ ONEKEY MANAGER ═══ -->
+  <!-- ═══ ONEKEY MANAGER (WindTerm style) — ships empty, add your own ═══ -->
   <sc-if value="{{ oneKeyOpen }}" hint-placeholder-val="{{ false }}">
-    <div class="dialog-backdrop" style="z-index:74" onClick="{{ closeOneKey }}">
-      <div class="dialog" style="width:720px;max-width:92vw;padding:0;overflow:hidden" onClick="{{ stop }}">
-        <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--color-divider)">
-          <span style="width:9px;height:9px;border-radius:50%;background:var(--color-accent-2)"></span>
-          <span style="font-family:var(--font-heading);font-weight:600;font-size:16px">OneKey Manager</span>
-          <div style="display:flex;gap:2px;margin-left:24px">
-            <sc-for list="{{ okTabs }}" as="t" hint-placeholder-count="3">
-              <div onClick="{{ t.pick }}" style="padding:7px 16px;font-size:13px;cursor:pointer;border-bottom:2px solid {{ t.bc }};color:{{ t.c }};font-weight:{{ t.w }}">{{ t.label }}</div>
-            </sc-for>
-          </div>
-          <span onClick="{{ closeOneKey }}" style="margin-left:auto;cursor:pointer;color:var(--color-neutral-600);font-size:16px" style-hover="color:var(--color-text)">×</span>
+    <div class="dialog-backdrop" style="z-index:74">
+      <div class="dialog" style="width:780px;max-width:96vw;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh" onClick="{{ stop }}">
+        <!-- top segmented tabs -->
+        <div style="display:flex;align-items:stretch;background:var(--color-neutral-100);border-bottom:1px solid var(--color-divider)">
+          <sc-for list="{{ okTabs }}" as="t" hint-placeholder-count="3">
+            <div onClick="{{ t.pick }}" style="flex:1;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px 0;font-size:13.5px;cursor:pointer;background:{{ t.bg }};color:{{ t.c }};font-weight:{{ t.w }};border-bottom:2px solid {{ t.bc }};border-right:1px solid var(--color-divider)" style-hover="color:var(--color-text)">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ t.dot }}"></span>{{ t.label }}
+            </div>
+          </sc-for>
+          <span onClick="{{ closeOneKey }}" title="Close" style="display:grid;place-items:center;width:38px;cursor:pointer;color:var(--color-neutral-600);font-size:16px" style-hover="color:var(--color-text)">×</span>
         </div>
-        <div style="display:grid;grid-template-columns:220px 1fr;min-height:420px">
-          <div style="border-right:1px solid var(--color-divider);display:flex;flex-direction:column">
-            <div style="flex:1;overflow-y:auto;padding:6px 0">
+        <sc-if value="{{ okTabSSH }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:250px 1fr;flex:1;min-height:440px">
+          <!-- left: key list + batch toolbar -->
+          <div style="display:flex;flex-direction:column;border-right:1px solid var(--color-divider);background:var(--color-surface)">
+            <div style="flex:1;overflow-y:auto;padding:5px 0">
+              <sc-if value="{{ okEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:18px 16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">出厂无任何 OneKey。<br>点击左下角 “+” 添加一条凭据。</div>
+              </sc-if>
               <sc-for list="{{ okList }}" as="k" hint-placeholder-count="5">
-                <div onClick="{{ k.pick }}" style="display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;background:{{ k.bg }};border-right:2px solid {{ k.br }}" style-hover="background:var(--color-neutral-200)">
-                  <span style="width:7px;height:7px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
-                  <span style="font-size:13.5px;font-weight:{{ k.w }}">{{ k.name }}</span>
+                <div onClick="{{ k.pick }}" style="display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;background:{{ k.bg }};border-left:2px solid {{ k.br }}" style-hover="background:var(--color-neutral-200)">
+                  <span style="width:7px;height:7px;border-radius:50%;background:var(--color-neutral-500);flex:none"></span>
+                  <span style="font-size:13px;font-family:ui-monospace,Menlo,monospace;font-weight:{{ k.w }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ k.name }}</span>
                 </div>
               </sc-for>
             </div>
-            <div style="border-top:1px solid var(--color-divider);display:flex;align-items:center;gap:12px;padding:8px 14px;font-size:12px;color:var(--color-neutral-600)">
-              <span onClick="{{ okAdd }}" style="cursor:pointer;font-size:15px" style-hover="color:var(--color-text)">+</span>
-              <span onClick="{{ okRemove }}" style="cursor:pointer;font-size:15px" style-hover="color:var(--color-text)">−</span>
+            <div style="border-top:1px solid var(--color-divider);display:flex;align-items:center;gap:14px;padding:9px 14px;font-size:12.5px;color:var(--color-neutral-500)">
+              <span onClick="{{ okAdd }}" title="Add" style="cursor:pointer;font-size:16px;line-height:1" style-hover="color:var(--color-text)">+</span>
+              <span onClick="{{ okRemove }}" title="Remove selected" style="cursor:pointer;font-size:16px;line-height:1" style-hover="color:var(--color-text)">−</span>
               <span onClick="{{ okDuplicate }}" style="margin-left:auto;cursor:pointer" style-hover="color:var(--color-text)">Duplicate</span>
+              <span onClick="{{ okRename }}" style="cursor:pointer" style-hover="color:var(--color-text)">Rename</span>
             </div>
           </div>
-          <div style="padding:20px 24px;display:flex;flex-direction:column;gap:16px;overflow-y:auto">
-            <div class="field"><label>Username</label><input class="input" type="text" value="{{ okUser }}" onChange="{{ onOkUser }}"></div>
-            <div class="field">
-              <label style="display:flex;align-items:center;gap:10px">Password
-                <span onClick="{{ okTogglePw }}" style="width:30px;height:16px;border-radius:9px;background:{{ okPwBg }};position:relative;cursor:pointer;flex:none"><span style="position:absolute;top:2px;left:{{ okPwKnob }};width:12px;height:12px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
-              </label>
-              <div style="display:flex;gap:8px;align-items:center">
-                <input class="input" type="{{ okPwType }}" value="{{ okPass }}" onChange="{{ onOkPass }}" style="flex:1">
-                <span onClick="{{ okRevealPw }}" style="cursor:pointer;color:var(--color-neutral-600);font-size:13px">{{ okRevealIcon }}</span>
+          <!-- right: credential form -->
+          <div style="padding:16px 22px;display:flex;flex-direction:column;gap:13px;overflow-y:auto">
+            <sc-if value="{{ okEmpty }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px;text-align:center;line-height:1.8">还没有 OneKey。<br>用左侧 “+” 新建后，在这里填写用户名 / 密码 / 密钥。</div>
+            </sc-if>
+            <sc-if value="{{ okHasSel }}" hint-placeholder-val="{{ true }}">
+              <div class="field" style="margin:0"><label>Username:</label>
+                <input class="input" type="text" value="{{ okUser }}" onChange="{{ onOkUser }}" style="font-family:ui-monospace,Menlo,monospace;font-size:13px">
               </div>
-            </div>
-            <div class="field">
-              <label>Public Key</label>
-              <table class="table" style="margin:0">
-                <thead><tr><th>System</th><th>Identity File</th></tr></thead>
-                <tbody>
+              <div class="field" style="margin:0">
+                <label style="display:flex;align-items:center">Password:
+                  <span onClick="{{ okTogglePw }}" title="连接时自动发送该密码" style="margin-left:auto;width:34px;height:18px;border-radius:10px;background:{{ okPwBg }};position:relative;cursor:pointer;flex:none"><span style="position:absolute;top:2px;left:{{ okPwKnob }};width:14px;height:14px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
+                </label>
+                <div style="position:relative">
+                  <input class="input" type="{{ okPwType }}" value="{{ okPass }}" onChange="{{ onOkPass }}" style="width:100%;box-sizing:border-box;padding-right:34px;font-family:ui-monospace,Menlo,monospace;font-size:13px">
+                  <span onClick="{{ okRevealPw }}" title="Show / hide" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);cursor:pointer;color:var(--color-neutral-500);font-size:13px;user-select:none" style-hover="color:var(--color-text)">👁</span>
+                </div>
+              </div>
+              <!-- public key: per-system identity files, empty by default -->
+              <div class="field" style="margin:0">
+                <label>Public Key:</label>
+                <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+                  <div style="display:grid;grid-template-columns:150px 1fr;background:var(--color-neutral-100);border-bottom:1px solid var(--color-divider)">
+                    <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600);border-right:1px solid var(--color-divider)">System</div>
+                    <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600)">Identity File</div>
+                  </div>
                   <sc-for list="{{ okKeys }}" as="pk" hint-placeholder-count="3">
-                    <tr><td style="font-size:13px">{{ pk.system }}</td><td style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:{{ pk.fileC }}">{{ pk.file }}</td></tr>
+                    <div onClick="{{ pk.pick }}" onDoubleClick="{{ pk.modify }}" style="display:grid;grid-template-columns:150px 1fr;cursor:pointer;background:{{ pk.bg }}" style-hover="background:var(--color-neutral-200)">
+                      <div style="padding:7px 12px;font-size:13px;border-right:1px solid var(--color-divider)">{{ pk.system }}</div>
+                      <div style="padding:7px 12px;font-family:ui-monospace,Menlo,monospace;font-size:12px;min-height:16px;color:var(--color-text)">{{ pk.file }}</div>
+                    </div>
                   </sc-for>
-                </tbody>
-              </table>
-            </div>
-            <div class="field">
-              <label>Keyboard Interactive</label>
-              <table class="table" style="margin:0">
-                <thead><tr><th>Challenge</th><th>Response</th></tr></thead>
-                <tbody><tr><td style="color:var(--color-neutral-500);font-size:12.5px">password:</td><td style="color:var(--color-neutral-500);font-size:12.5px">••• (from OneKey)</td></tr></tbody>
-              </table>
-            </div>
+                  <div style="display:flex;justify-content:flex-end;padding:6px 12px;border-top:1px solid var(--color-divider)">
+                    <span onClick="{{ okModifyKey }}" style="font-size:12.5px;color:var(--color-neutral-500);cursor:pointer" style-hover="color:var(--color-text)">Modify</span>
+                  </div>
+                </div>
+              </div>
+              <!-- keyboard interactive -->
+              <div class="field" style="margin:0">
+                <label>Keyboard Interactive:</label>
+                <div style="border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+                  <div style="display:grid;grid-template-columns:1fr 1fr;background:var(--color-neutral-100);border-bottom:1px solid var(--color-divider)">
+                    <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600);border-right:1px solid var(--color-divider)">Challenge</div>
+                    <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600)">Response</div>
+                  </div>
+                  <sc-if value="{{ okKbiEmpty }}" hint-placeholder-val="{{ true }}">
+                    <div style="padding:12px;font-size:12px;color:var(--color-neutral-500)">（空 — 打开上方 Password 开关后自动应答密码提示，或点 Modify 添加自定义应答）</div>
+                  </sc-if>
+                  <sc-for list="{{ okKbiRows }}" as="kb" hint-placeholder-count="2">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--color-divider)">
+                      <div style="padding:7px 12px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace;border-right:1px solid var(--color-divider)">{{ kb.challenge }}</div>
+                      <div style="padding:7px 12px;font-size:12.5px;color:var(--color-neutral-600)">{{ kb.response }}</div>
+                    </div>
+                  </sc-for>
+                  <div style="display:flex;justify-content:flex-end;padding:6px 12px">
+                    <span onClick="{{ okKbiAdd }}" style="font-size:12.5px;color:var(--color-neutral-500);cursor:pointer" style-hover="color:var(--color-text)">Modify</span>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-top:1px solid var(--color-divider)">
-          <span style="font-size:12px;color:var(--color-accent-2-700)">🔒 Credentials are entered once and reused on every connection.</span>
-          <div class="dialog-actions" style="margin-left:auto;margin-top:0">
-            <button class="btn btn-secondary" onClick="{{ closeOneKey }}">Cancel</button>
-            <button class="btn btn-primary" onClick="{{ saveOneKey }}">OK</button>
+        </sc-if>
+        <sc-if value="{{ okTabOther }}" hint-placeholder-val="{{ false }}">
+          <div style="min-height:440px;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px">{{ okTabHint }}</div>
+        </sc-if>
+        <!-- bottom bar -->
+        <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--color-divider)">
+          <span style="font-size:12.5px;color:var(--color-accent-2-700);display:flex;align-items:center;gap:7px">🔒 凭据只保存在本机 — 连接时自动应答服务器的密码提示。</span>
+          <div style="display:flex;gap:8px;margin-left:auto">
+            <button class="btn btn-secondary" style="min-width:96px" onClick="{{ closeOneKey }}">Cancel</button>
+            <button class="btn btn-primary" style="min-width:96px" onClick="{{ saveOneKey }}">Ok</button>
           </div>
         </div>
       </div>
@@ -1153,8 +1289,9 @@ class Component extends DCLogic {
       dragOver: false,
       oneKeyOpen: false,
       oneKeyTab: 'SSH',
-      activeKey: 'aoboyan',
+      activeKey: null,
       okReveal: false,
+      okKeySel: 0,
       pickerOpen: false,
       pickerHost: '',
       pendingSession: null,
@@ -1165,12 +1302,14 @@ class Component extends DCLogic {
       quickCtx: { open: false, x: 0, y: 0, id: null },
       quickEdit: { open: false, id: null, label: '', cmd: '' },
       quickCmds: [
-        { id: 'q1', label: 'Service status', cmd: 'systemctl status nginx' },
-        { id: 'q2', label: 'Tail error log', cmd: 'tail -n 40 /var/log/nginx/error.log' },
-        { id: 'q3', label: 'Disk usage', cmd: 'df -h' },
-        { id: 'q4', label: 'Top by memory', cmd: 'ps aux --sort=-%mem | head' },
-        { id: 'q5', label: 'Who is on', cmd: 'w' }
+        { id: 'q1', label: 'Service status', cmd: 'systemctl status nginx', group: 'Quick' },
+        { id: 'q2', label: 'Tail error log', cmd: 'tail -n 40 /var/log/nginx/error.log', group: 'Quick' },
+        { id: 'q3', label: 'Disk usage', cmd: 'df -h', group: 'Quick' },
+        { id: 'q4', label: 'Top by memory', cmd: 'ps aux --sort=-%mem | head', group: 'Quick' },
+        { id: 'q5', label: 'Who is on', cmd: 'w', group: 'Quick' }
       ],
+      quickGroups: ['Quick'],
+      quickMgr: { open: false, group: 'Quick', sel: 0 },
       oneKeys: [],
       termFont: this.props.terminalFontSize ?? 12.5,
       termLH: this.props.terminalLineHeight ?? 1.2,
@@ -1178,8 +1317,8 @@ class Component extends DCLogic {
       openTabs: [],
       activeTab: null,
       buffers: {},
-      chat: [],
-      thinking: false,
+      chats: {},        // AI conversation per terminal: sessionId → message[]
+      thinkingBy: {},   // per-terminal "Operator is thinking" flag
       draft: '',
       quote: '',
       selBar: null,
@@ -1240,6 +1379,13 @@ class Component extends DCLogic {
       const ok = JSON.parse(localStorage.getItem('wireline-onekeys-v1') || 'null');
       if (Array.isArray(ok)) this.setState({ oneKeys: ok, activeKey: ok[0] ? ok[0].id : null });
     } catch (e) {}
+    try {
+      const qc = JSON.parse(localStorage.getItem('wireline-quickcmds-v1') || 'null');
+      if (qc && Array.isArray(qc.cmds)) this.setState({
+        quickCmds: qc.cmds,
+        quickGroups: (Array.isArray(qc.groups) && qc.groups.length) ? qc.groups : ['Quick']
+      });
+    } catch (e) {}
     this.keyHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) { e.preventDefault(); this.setState(s => ({ paletteOpen: !s.paletteOpen, paletteQuery: '', paletteSel: 0 })); }
       else if (e.key === 'Escape' && this.state.paletteOpen) this.setState({ paletteOpen: false });
@@ -1259,9 +1405,15 @@ class Component extends DCLogic {
     return !!(window.__TAURI__ && typeof window.Terminal !== 'undefined');
   }
 
-  // ssh command for a real user-created SSH session; null → local default shell.
+  // ssh/telnet command for a real user-created session; null → local default shell.
   sshSpecFor(sess) {
-    if (!sess || sess.type !== 'ssh' || !sess.addr) return null;
+    if (!sess || !sess.addr) return null;
+    if (sess.type === 'telnet') {
+      const args = [sess.addr];
+      if (sess.port && String(sess.port) !== '23') args.push(String(sess.port));
+      return { program: 'telnet', args };
+    }
+    if (sess.type !== 'ssh') return null;
     const args = [];
     if (sess.port && String(sess.port) !== '22') args.push('-p', String(sess.port));
     // accept-new: trust a host's key on first connect (still rejects a changed key)
@@ -1283,6 +1435,7 @@ class Component extends DCLogic {
     this._pwSent = false;
     this._ptyDead = false;
     this._scroll = '';
+    this._lineBuf = '';
     try { term.reset(); } catch (e) {}
     if (spec) term.write('Connecting to ' + (sess.user ? sess.user + '@' : '') + sess.addr + (sess.port && String(sess.port) !== '22' ? ':' + sess.port : '') + ' …\r\n');
     const payload = { id, cols: term.cols || 80, rows: term.rows || 24 };
@@ -1298,6 +1451,7 @@ class Component extends DCLogic {
     const invoke = T.invoke;
     const listen = T.event && T.event.listen;
     host.style.paddingLeft = '80px'; // reserve room for the timestamp/line-number gutter
+    host.style.paddingRight = '14px'; // reserve room for the search match locator strip
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       fontSize: 13,
@@ -1325,6 +1479,7 @@ class Component extends DCLogic {
       term.onRender(() => this.renderGutter());
       term.onScroll(() => this.renderGutter());
     } catch (e) { this.xtermGutter = null; }
+    this.ensureXtermTicks();
     // zmodem sentry: intercepts rz/sz transfers in the PTY byte stream
     this.zsentry = null;
     if (window.Zmodem && window.Zmodem.Sentry) {
@@ -1345,6 +1500,7 @@ class Component extends DCLogic {
         if (d.indexOf('\r') >= 0 || d.indexOf('\n') >= 0) { this.connectSession(this.sess(this.state.activeTab)); }
         return;
       }
+      this.captureTyped(d);
       if (this.xtermId) invoke('pty_write', { id: this.xtermId, data: d }).catch(() => {});
     });
     term.onResize(({ cols, rows }) => { if (this.xtermId) invoke('pty_resize', { id: this.xtermId, cols, rows }).catch(() => {}); });
@@ -1483,6 +1639,30 @@ class Component extends DCLogic {
     return false;
   }
 
+  // Track what the user literally types into the real terminal so finished
+  // command lines land in the per-session Command History panel. Escape
+  // sequences (arrow keys), ^C/^U and backspace are handled; text inserted by
+  // the shell itself (tab completion, history recall) is not captured.
+  captureTyped(d) {
+    if (this._lineBuf == null) this._lineBuf = '';
+    for (let i = 0; i < d.length; i++) {
+      const ch = d[i];
+      if (ch === '\x1b') { // skip one escape sequence
+        i++;
+        if (d[i] === '[' || d[i] === 'O') { i++; while (i < d.length && !/[A-Za-z~]/.test(d[i])) i++; }
+        continue;
+      }
+      if (ch === '\r' || ch === '\n') {
+        const cmd = this._lineBuf.trim();
+        this._lineBuf = '';
+        if (cmd) this.recordCmd(this.xtermSessId || this.state.activeTab, cmd);
+      }
+      else if (ch === '\x7f' || ch === '\b') this._lineBuf = this._lineBuf.slice(0, -1);
+      else if (ch === '\x03' || ch === '\x15') this._lineBuf = ''; // ^C / ^U
+      else if (ch >= ' ') this._lineBuf += ch;
+    }
+  }
+
   terminalText() { return this._scroll || ''; }
 
   // Draw the timestamp + line-number gutter, aligned to xterm's rendered rows.
@@ -1514,13 +1694,78 @@ class Component extends DCLogic {
     } catch (e) {}
   }
 
-  // Find in the real terminal via the xterm search addon.
+  // Find in the real terminal via the xterm search addon; also refreshes the
+  // WindTerm-style match locator strip on the right edge and the n/m counter.
   xtermFind(forward) {
     if (!this.xtermSearch || !this.xterm) return false;
-    const q = this.state.logQuery; if (!q) return false;
+    this.xtermScanMatches();
+    this.renderXtermTicks();
+    const q = this.state.logQuery;
+    if (!q) { this._xtermMatchIdx = -1; return false; }
     const opts = { caseSensitive: !!this.state.findCase, wholeWord: !!this.state.findWord, regex: !!this.state.findRegex };
     try { if (forward) this.xtermSearch.findNext(q, opts); else this.xtermSearch.findPrevious(q, opts); } catch (e) {}
+    if (this._xtermTotal > 0) {
+      const cur = this._xtermMatchIdx == null ? -1 : this._xtermMatchIdx;
+      this._xtermMatchIdx = ((cur + (forward ? 1 : -1)) % this._xtermTotal + this._xtermTotal) % this._xtermTotal;
+    } else this._xtermMatchIdx = -1;
+    this.forceUpdate();
     return true;
+  }
+
+  // right-edge locator strip: one tick per buffer line containing a match
+  ensureXtermTicks() {
+    const host = this.xtermHostRef.current;
+    if (!host || this.xtermTicksEl) return;
+    const el = document.createElement('div');
+    el.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:11px;display:none;background:rgba(0,0,0,.28);border-left:1px solid #33312f;z-index:6;cursor:pointer';
+    el.addEventListener('click', (ev) => {
+      const term = this.xterm; if (!term) return;
+      const frac = ev.offsetY / Math.max(1, el.clientHeight);
+      const buf = term.buffer.active;
+      const line = Math.max(0, Math.min(buf.length - 1, Math.round(frac * buf.length)));
+      try { term.scrollToLine(Math.max(0, line - Math.floor(term.rows / 2))); } catch (e) {}
+    });
+    host.appendChild(el);
+    this.xtermTicksEl = el;
+  }
+
+  // scan the whole xterm scrollback for Find matches (uses the Find options)
+  xtermScanMatches() {
+    const term = this.xterm;
+    const q = (this.state.logQuery || '').trim();
+    this._xtermHits = []; this._xtermTotal = 0;
+    if (!term || !q) return;
+    let re = null;
+    try {
+      let src = this.state.findRegex ? q : q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (this.state.findWord) src = '\\b(?:' + src + ')\\b';
+      re = new RegExp(src, this.state.findCase ? 'g' : 'gi');
+    } catch (e) { return; }
+    const buf = term.buffer.active;
+    for (let i = 0; i < buf.length; i++) {
+      const line = buf.getLine(i); if (!line) continue;
+      const text = line.translateToString(true);
+      if (!text) continue;
+      re.lastIndex = 0;
+      let m, n = 0;
+      while ((m = re.exec(text)) !== null) { n++; this._xtermTotal++; if (m.index === re.lastIndex) re.lastIndex++; }
+      if (n) this._xtermHits.push(i);
+    }
+  }
+
+  renderXtermTicks() {
+    this.ensureXtermTicks();
+    const el = this.xtermTicksEl, term = this.xterm;
+    if (!el || !term) return;
+    const q = (this.state.logQuery || '').trim();
+    if (!this.state.searchOpen || !q || !this._xtermHits || !this._xtermHits.length) { el.style.display = 'none'; return; }
+    const total = Math.max(1, term.buffer.active.length);
+    let html = '';
+    this._xtermHits.forEach(li => {
+      html += '<div style="position:absolute;left:1px;right:1px;top:' + (li / total * 100).toFixed(2) + '%;height:3px;background:rgba(255,206,84,.85);border-radius:1px"></div>';
+    });
+    el.innerHTML = html;
+    el.style.display = 'block';
   }
 
   // Keep the xterm element attached to the current host (survives view switches),
@@ -1553,6 +1798,7 @@ class Component extends DCLogic {
     if (this.xtermResize) window.removeEventListener('resize', this.xtermResize);
     if (window.__TAURI__ && this.xtermId) { try { window.__TAURI__.invoke('pty_kill', { id: this.xtermId }); } catch (e) {} }
     if (this.xterm) { try { this.xterm.dispose(); } catch (e) {} this.xterm = null; }
+    this.xtermTicksEl = null;
   }
 
   applyBodyTheme() {
@@ -1567,6 +1813,12 @@ class Component extends DCLogic {
   componentDidUpdate() {
     this.applyBodyTheme();
     this.syncXterm();
+    // persist quick commands + groups whenever they change
+    const qj = JSON.stringify({ g: this.state.quickGroups, c: this.state.quickCmds });
+    if (qj !== this._lastQuickJson) {
+      this._lastQuickJson = qj;
+      try { localStorage.setItem('wireline-quickcmds-v1', JSON.stringify({ groups: this.state.quickGroups, cmds: this.state.quickCmds })); } catch (e) {}
+    }
     const t = this.termRef.current;
     if (t) {
       if (this.pendingGoto != null && this.matchRef.current) {
@@ -1586,6 +1838,35 @@ class Component extends DCLogic {
   }
 
   sess(id) { return this.state.sessions.find(s => s.id === id); }
+
+  // ─── per-terminal AI chat (each terminal keeps its own conversation) ───
+  chatKey(id) { return id || '__global__'; }
+  chatOf(id) { return this.state.chats[this.chatKey(id)] || []; }
+  addChat(id, msg) {
+    const k = this.chatKey(id);
+    this.setState(s => ({ chats: Object.assign({}, s.chats, { [k]: (s.chats[k] || []).concat(msg) }) }));
+  }
+  patchChatMsg(id, msgId, next) {
+    const k = this.chatKey(id);
+    this.setState(s => ({ chats: Object.assign({}, s.chats, { [k]: (s.chats[k] || []).map(m => m.id === msgId ? next : m) }) }));
+  }
+  thinkingOf(id) { return !!this.state.thinkingBy[this.chatKey(id)]; }
+  setThinking(id, on) {
+    const k = this.chatKey(id);
+    this.setState(s => ({ thinkingBy: Object.assign({}, s.thinkingBy, { [k]: !!on }) }));
+  }
+
+  // Wipe the AI conversation of the CURRENT terminal and start a fresh one.
+  clearAiChat() {
+    const id = this.state.activeTab;
+    if (this._opSess === this.chatKey(id)) { this._opStop = true; }
+    const k = this.chatKey(id);
+    this.setState(s => ({
+      chats: Object.assign({}, s.chats, { [k]: [] }),
+      thinkingBy: Object.assign({}, s.thinkingBy, { [k]: false }),
+      quote: ''
+    }));
+  }
 
   appendLines(id, lines) {
     this.setState(s => ({ buffers: Object.assign({}, s.buffers, { [id]: (s.buffers[id] || []).concat(lines) }) }));
@@ -1914,13 +2195,50 @@ class Component extends DCLogic {
   runQuick(cmd) {
     this.setState({ quickOpen: false });
     // run in the real terminal when available; otherwise the scripted fallback
-    if (this.xterm && this.xtermId && window.__TAURI__) { this.writeToPty(cmd + '\n'); return; }
+    if (this.xterm && this.xtermId && window.__TAURI__) { this.writeToPty(cmd + '\n'); this.recordCmd(this.state.activeTab, cmd); return; }
     if (this.state.activeTab) this.execLocal(cmd);
   }
 
   addQuickFromDraft() {
     const cmd = this.state.termDraft.trim(); if (!cmd) return;
-    this.setState(s => ({ quickCmds: s.quickCmds.concat({ id: 'q' + (++this.seq), label: cmd.length > 22 ? cmd.slice(0, 22) + '\u2026' : cmd, cmd }) }));
+    this.setState(s => ({ quickCmds: s.quickCmds.concat({ id: 'q' + (++this.seq), label: cmd.length > 22 ? cmd.slice(0, 22) + '\u2026' : cmd, cmd, group: 'Quick' }) }));
+  }
+
+  // \u2500\u2500\u2500 quick command manager (WindTerm style: groups + batch edit) \u2500\u2500\u2500
+  openQuickMgr() {
+    this._quickBackup = { groups: this.state.quickGroups.slice(), cmds: JSON.parse(JSON.stringify(this.state.quickCmds)) };
+    this.setState(s => ({ quickMgr: { open: true, group: s.quickGroups[0] || 'Quick', sel: 0 } }));
+  }
+
+  qmCmds() {
+    const g = this.state.quickMgr.group;
+    return this.state.quickCmds.filter(q => (q.group || 'Quick') === g);
+  }
+
+  qmSelObj() {
+    const list = this.qmCmds();
+    if (!list.length) return null;
+    return list[Math.max(0, Math.min(this.state.quickMgr.sel, list.length - 1))];
+  }
+
+  qmPatchSel(patch) {
+    const sel = this.qmSelObj(); if (!sel) return;
+    this.setState(s => ({ quickCmds: s.quickCmds.map(q => q.id === sel.id ? Object.assign({}, q, patch) : q) }));
+  }
+
+  // move the selected command up/down inside its group (reorders the global list)
+  qmMove(dir) {
+    const g = this.state.quickMgr.group;
+    this.setState(s => {
+      const idxs = s.quickCmds.map((q, i) => ((q.group || 'Quick') === g ? i : -1)).filter(i => i >= 0);
+      if (!idxs.length) return {};
+      const pos = Math.max(0, Math.min(s.quickMgr.sel, idxs.length - 1));
+      const npos = pos + dir;
+      if (npos < 0 || npos >= idxs.length) return {};
+      const arr = s.quickCmds.slice();
+      const t = arr[idxs[pos]]; arr[idxs[pos]] = arr[idxs[npos]]; arr[idxs[npos]] = t;
+      return { quickCmds: arr, quickMgr: Object.assign({}, s.quickMgr, { sel: npos }) };
+    });
   }
 
   quickConnect(host) {
@@ -1941,9 +2259,11 @@ class Component extends DCLogic {
       const buffers = Object.assign({}, s.buffers); delete buffers[id];
       const cmdHistories = Object.assign({}, s.cmdHistories); delete cmdHistories[id];
       const pinnedIds = Object.assign({}, s.pinnedIds); delete pinnedIds[id];
+      const chats = Object.assign({}, s.chats); delete chats[id];
+      const thinkingBy = Object.assign({}, s.thinkingBy); delete thinkingBy[id];
       return {
         sessions: s.sessions.filter(x => x.id !== id),
-        openTabs, buffers, pinnedIds, cmdHistories,
+        openTabs, buffers, pinnedIds, cmdHistories, chats, thinkingBy,
         activeTab: s.activeTab === id ? (openTabs[0] || null) : s.activeTab,
         ctx: { open: false, x: 0, y: 0, id: null }
       };
@@ -2056,8 +2376,8 @@ class Component extends DCLogic {
   }
 
   // ─── AI Operator ───
-  opSay(text, mono, runCmd) {
-    this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'op', text, mono: !!mono, runCmd: runCmd || '' }) }));
+  opSay(text, mono, runCmd, sessId) {
+    this.addChat(sessId !== undefined ? sessId : this.state.activeTab, { id: ++this.seq, kind: 'op', text, mono: !!mono, runCmd: runCmd || '' });
   }
 
   // Autonomous agent loop driven by the installed opencode CLI: opencode decides
@@ -2065,14 +2385,22 @@ class Component extends DCLogic {
   // read the result, and loop — no manual "Run" clicks, no cmd windows. This is
   // the IDE-style, multi-step opencode behaviour, executing on the connected
   // session (not the local machine).
-  async askOpencode(sessName, goal) {
-    if (!window.__TAURI__) { this.setState({ thinking: false }); this.opSay('opencode 需要在桌面应用中运行(浏览器预览下不可用)。', true); return; }
-    if (!goal) { const u = this.state.chat.slice().reverse().find(m => m.kind === 'user'); goal = u ? u.text : ''; }
+  async askOpencode(sessId, sessName, goal) {
+    if (!window.__TAURI__) { this.setThinking(sessId, false); this.opSay('opencode 需要在桌面应用中运行(浏览器预览下不可用)。', true, '', sessId); return; }
+    if (!goal) { const u = this.chatOf(sessId).slice().reverse().find(m => m.kind === 'user'); goal = u ? u.text : ''; }
     this._opStop = false;
-    this.setState({ thinking: true });
+    this._opSess = this.chatKey(sessId);
+    this.setThinking(sessId, true);
     const maxSteps = 10;
     for (let step = 0; step < maxSteps; step++) {
-      if (this._opStop) { this.setState({ thinking: false }); return; }
+      if (this._opStop) { this.setThinking(sessId, false); return; }
+      // the live PTY follows the active tab — if the user switched terminals,
+      // pause instead of typing commands into the wrong session
+      if (this.state.activeTab !== sessId) {
+        this.setThinking(sessId, false);
+        this.opSay('⏸ 终端已切换，自动执行已暂停。回到该终端后发送“继续”即可恢复。', false, '', sessId);
+        return;
+      }
       const scroll = this.terminalText();
       const prompt =
         'You are an autonomous operator driving a REMOTE terminal (SSH session "' + sessName + '").\n' +
@@ -2085,20 +2413,20 @@ class Component extends DCLogic {
         '- When the goal is already satisfied by the output above, reply with a one-line summary starting with "DONE: " and NO code block.';
       let reply;
       try { reply = await this.opencodeOnce(prompt); }
-      catch (e) { this.setState({ thinking: false }); this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认已安装并登录 opencode。', true); return; }
-      if (this._opStop) { this.setState({ thinking: false }); return; }
+      catch (e) { this.setThinking(sessId, false); this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认已安装并登录 opencode。', true, '', sessId); return; }
+      if (this._opStop) { this.setThinking(sessId, false); return; }
       reply = String(reply || '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
       const mm = reply.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
       const cmd = mm ? mm[1].trim() : '';
       const isDone = /(^|\n)\s*DONE[:：]/i.test(reply) || !cmd;
       if (isDone) {
-        this.setState({ thinking: false });
+        this.setThinking(sessId, false);
         const summary = reply
           .replace(/```[\s\S]*?```/g, '')
           .replace(/^[ \t]*>[ \t]*build[ \t]*·[^\n]*/gim, '')
           .replace(/^[\s\S]*?DONE[:：]?/i, '')
           .trim();
-        this.opSay(summary || reply || '(已完成)');
+        this.opSay(summary || reply || '(已完成)', false, '', sessId);
         return;
       }
       // show opencode's reasoning ("thinking"), then the command it runs
@@ -2107,12 +2435,12 @@ class Component extends DCLogic {
         .replace(/^[ \t]*>[ \t]*build[ \t]*·[^\n]*/gim, '')
         .replace(/^[ \t]*DONE[:：]?/gim, '')
         .trim();
-      if (reasoning) this.opSay('💭 ' + reasoning);
-      this.opSay('▶ ' + cmd, true);
+      if (reasoning) this.opSay('💭 ' + reasoning, false, '', sessId);
+      this.opSay('▶ ' + cmd, true, '', sessId);
       await this.runInTerminalAndWait(cmd);
     }
-    this.setState({ thinking: false });
-    this.opSay('已自动执行 ' + maxSteps + ' 步后暂停。你可以继续追问,或说“继续”。');
+    this.setThinking(sessId, false);
+    this.opSay('已自动执行 ' + maxSteps + ' 步后暂停。你可以继续追问,或说“继续”。', false, '', sessId);
   }
 
   opencodeOnce(prompt) {
@@ -2124,8 +2452,9 @@ class Component extends DCLogic {
   stopOpencode() {
     this._opStop = true;
     this.writeToPty('\x03');
-    this.setState({ thinking: false });
-    this.opSay('⏹ 已停止。', true);
+    const sessId = this.state.activeTab;
+    this.setThinking(sessId, false);
+    this.opSay('⏹ 已停止。', true, '', sessId);
   }
 
   // Write a command to the SSH PTY and resolve once it has finished. Completion
@@ -2137,6 +2466,7 @@ class Component extends DCLogic {
       if (!this.xtermId || !window.__TAURI__) { resolve(); return; }
       const marker = 'OCDONE' + (++this.seq) + 'X';
       this.writeToPty(cmd + '; echo ' + marker + '\n');
+      this.recordCmd(this.xtermSessId || this.state.activeTab, cmd);
       const start = Date.now();
       let lastLen = -1, lastChange = Date.now(), seen = false;
       const check = () => {
@@ -2154,12 +2484,12 @@ class Component extends DCLogic {
 
   // Real model call over an OpenAI-compatible endpoint (see Settings → API base URL / key).
   // When no endpoint is configured, sendAI falls back to the built-in scripted playbooks.
-  async askModel(sessName) {
+  async askModel(sessId, sessName) {
     let sys = 'You are the AI Operator inside Wireline, a terminal manager. You are attached to the session "' + sessName + '". Give concise, practical operations help. When you want a command to run in the terminal, put it on its own line in a fenced code block. Reply in the user’s language.';
     // let the model read what is currently on the terminal
     const scroll = this.terminalText();
     if (scroll && scroll.trim()) sys += '\n\nCurrent terminal output (most recent last):\n' + scroll.slice(-4000);
-    const history = this.state.chat
+    const history = this.chatOf(sessId)
       .filter(m => (m.kind === 'user' || m.kind === 'op') && m.text)
       .slice(-12)
       .map(m => ({ role: m.kind === 'user' ? 'user' : 'assistant', content: m.text }));
@@ -2177,11 +2507,11 @@ class Component extends DCLogic {
       const data = await resp.json();
       const txt = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '(empty reply)';
       const mm = txt.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
-      this.setState({ thinking: false });
-      this.opSay(txt, false, mm ? mm[1].trim() : '');
+      this.setThinking(sessId, false);
+      this.opSay(txt, false, mm ? mm[1].trim() : '', sessId);
     } catch (e) {
-      this.setState({ thinking: false });
-      this.opSay('Model request failed: ' + (e.message || e) + '\nCheck the API base URL and key in Settings.', true);
+      this.setThinking(sessId, false);
+      this.opSay('Model request failed: ' + (e.message || e) + '\nCheck the API base URL and key in Settings.', true, '', sessId);
     }
   }
 
@@ -2279,32 +2609,39 @@ class Component extends DCLogic {
         else this.opSay('Usage: /schedule <30s | 5min | 14:30> <message>');
         return true;
       }
+      case 'clear':
+      case 'new':
+        this.clearAiChat(); return true;
       case 'help':
-        this.opSay('Commands:\n  /models · /model <name>\n  /mcp · /mcp pin <name> · @<mcp> …\n  /skills · /workflows\n  /schedule <time> <message>', true); return true;
+        this.opSay('Commands:\n  /models · /model <name>\n  /mcp · /mcp pin <name> · @<mcp> …\n  /skills · /workflows\n  /schedule <time> <message>\n  /clear — 清除当前终端的 AI 会话，重新开始', true); return true;
       default:
         return false;
     }
   }
 
   sendAI(text, quote) {
-    const sessName = this.sess(this.state.activeTab) ? this.sess(this.state.activeTab).name : 'this session';
-    this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'user', text, quote: quote || '' }), draft: '', quote: '', thinking: true }));
+    const sessId = this.state.activeTab;
+    const sessName = this.sess(sessId) ? this.sess(sessId).name : 'this session';
+    this.addChat(sessId, { id: ++this.seq, kind: 'user', text, quote: quote || '' });
+    this.setState({ draft: '', quote: '' });
+    this.setThinking(sessId, true);
     setTimeout(() => {
       // @mcp targeting
       const atM = text.match(/^@([\w-]+)\s*(.*)$/);
       if (atM) {
         const mcp = this.state.mcps.find(m => m.name === atM[1] || m.name.startsWith(atM[1]));
-        this.setState({ thinking: false });
-        if (!mcp) { this.opSay('No MCP named “' + atM[1] + '”. See /mcp.'); return; }
-        this.opSay('Using @' + mcp.name + ' MCP → ' + (atM[2] || 'ready') + '\n\n' + (mcp.name === 'kubernetes' ? 'kubectl get pods -n prod — 3 running, 0 pending. Deployment app-backend is healthy at rev 2.4.1.' : mcp.name === 'prometheus' ? 'query: rate(http_requests_total{code=~"5.."}[5m]) → 0.02/s and falling since the restart.' : mcp.name === 'github' ? 'Latest release v2.4.1 · 3 open PRs · CI green on main.' : 'Listed /var/log on web-01 — nginx/, journal/, audit/. Ready for file ops.'));
+        this.setThinking(sessId, false);
+        if (!mcp) { this.opSay('No MCP named “' + atM[1] + '”. See /mcp.', false, '', sessId); return; }
+        this.opSay('Using @' + mcp.name + ' MCP → ' + (atM[2] || 'ready') + '\n\n' + (mcp.name === 'kubernetes' ? 'kubectl get pods -n prod — 3 running, 0 pending. Deployment app-backend is healthy at rev 2.4.1.' : mcp.name === 'prometheus' ? 'query: rate(http_requests_total{code=~"5.."}[5m]) → 0.02/s and falling since the restart.' : mcp.name === 'github' ? 'Latest release v2.4.1 · 3 open PRs · CI green on main.' : 'Listed /var/log on web-01 — nginx/, journal/, audit/. Ready for file ops.'), false, '', sessId);
         return;
       }
-      if (this.state.model === 'opencode') { this.askOpencode(sessName, quote ? quote + ' ' + text : text); return; }
-      if (this.state.apiBase && this.state.apiKey) { this.askModel(sessName); return; }
+      if (this.state.model === 'opencode') { this.askOpencode(sessId, sessName, quote ? quote + ' ' + text : text); return; }
+      if (this.state.apiBase && this.state.apiKey) { this.askModel(sessId, sessName); return; }
       const pb = this.playbookFor(quote ? quote + ' ' + text : text, sessName);
       const plan = quote ? 'Looking at the output you referenced — ' + pb.plan : pb.plan;
-      this.runQueue = { steps: pb.steps, idx: 0, done: pb.done, sessionId: this.state.activeTab };
-      this.setState(s => ({ thinking: false, chat: s.chat.concat({ id: ++this.seq, kind: 'op', text: plan }) }));
+      this.runQueue = { steps: pb.steps, idx: 0, done: pb.done, sessionId: sessId };
+      this.setThinking(sessId, false);
+      this.addChat(sessId, { id: ++this.seq, kind: 'op', text: plan });
       setTimeout(() => this.proposeNext(), 500);
     }, 900);
   }
@@ -2312,7 +2649,8 @@ class Component extends DCLogic {
   send() {
     const text = this.state.draft.trim(); if (!text) return;
     if (text.startsWith('/')) {
-      this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'user', text }), draft: '' }));
+      this.addChat(this.state.activeTab, { id: ++this.seq, kind: 'user', text });
+      this.setState({ draft: '' });
       if (!this.handleSlash(text)) this.opSay('Unknown command. Try /help.');
       return;
     }
@@ -2331,7 +2669,7 @@ class Component extends DCLogic {
     const step = q.steps[q.idx];
     const id = ++this.seq;
     const label = 'step ' + (q.idx + 1) + ' of ' + q.steps.length;
-    this.setState(s => ({ chat: s.chat.concat({ id, kind: 'prop', cmdText: step.cmd, note: step.note, stepLabel: label }) }));
+    this.addChat(q.sessionId, { id, kind: 'prop', cmdText: step.cmd, note: step.note, stepLabel: label });
     if (!this.needsApproval(step)) setTimeout(() => this.approve(id), 800);
   }
 
@@ -2339,9 +2677,7 @@ class Component extends DCLogic {
     const q = this.runQueue; if (!q) return;
     const step = q.steps[q.idx];
     const time = new Date().toTimeString().slice(0, 8);
-    this.setState(s => ({
-      chat: s.chat.map(m => m.id === id ? { id, kind: 'cmd', cmdText: step.cmd, note: step.note, meta: 'ran · ' + time + ' · exit 0', ok: true } : m)
-    }));
+    this.patchChatMsg(q.sessionId, id, { id, kind: 'cmd', cmdText: step.cmd, note: step.note, meta: 'ran · ' + time + ' · exit 0', ok: true });
     const host = this.sess(q.sessionId) ? this.sess(q.sessionId).host : 'host';
     this.appendLines(q.sessionId, [this.mkLine.p(host, step.cmd, true)].concat(step.out));
     this.recordCmd(q.sessionId, step.cmd);
@@ -2354,7 +2690,7 @@ class Component extends DCLogic {
   skip(id) {
     const q = this.runQueue; if (!q) return;
     const step = q.steps[q.idx];
-    this.setState(s => ({ chat: s.chat.map(m => m.id === id ? { id, kind: 'cmd', cmdText: step.cmd, meta: 'skipped by you', ok: false } : m) }));
+    this.patchChatMsg(q.sessionId, id, { id, kind: 'cmd', cmdText: step.cmd, meta: 'skipped by you', ok: false });
     q.idx += 1;
     setTimeout(() => this.proposeNext(), 400);
   }
@@ -2362,14 +2698,14 @@ class Component extends DCLogic {
   finishRun() {
     const q = this.runQueue; if (!q) return;
     this.runQueue = null;
-    this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'op', text: q.done }) }));
+    this.addChat(q.sessionId, { id: ++this.seq, kind: 'op', text: q.done });
   }
 
   // ─── dialog ───
   connectDialog() {
     const d = this.state.dlg;
-    const name = d.label.trim() || (d.type === 'AI Agent' ? 'new-agent' : d.host);
-    const type = { 'SSH': 'ssh', 'Serial': 'serial', 'Telnet': 'telnet', 'Local': 'local', 'AI Agent': 'agent' }[d.type];
+    const name = d.label.trim() || d.host || (d.type === 'Shell' ? 'local-shell' : (d.type === 'AI Agent' ? 'new-agent' : 'session'));
+    const type = { 'SSH': 'ssh', 'Serial': 'serial', 'Telnet': 'telnet', 'Shell': 'local', 'Local': 'local', 'AI Agent': 'agent' }[d.type];
     const id = 'new' + (++this.seq);
     const sub = type === 'agent' ? 'agent · idle' : type === 'serial' ? d.host + ' · ' + d.baud + ' ' + d.dataBits + (d.parity === 'None' ? 'N' : d.parity[0]) + d.stopBits : type === 'local' ? (d.host || 'zsh') + ' · ~' : d.host + ':' + d.port;
     // Credentials come from a picked OneKey, or the username/password fields.
@@ -2391,6 +2727,28 @@ class Component extends DCLogic {
 
   persistOneKeys(list) {
     try { localStorage.setItem('wireline-onekeys-v1', JSON.stringify(list || this.state.oneKeys)); } catch (e) {}
+  }
+
+  // Set the identity-file path for one of the Public Key rows (Linux/macOS/Windows).
+  okModifyIdentity(rowIdx) {
+    const key = this.state.oneKeys.find(k => k.id === this.state.activeKey); if (!key) return;
+    const sysKeys = ['linux', 'mac', 'win'];
+    const sk = sysKeys[rowIdx] || 'linux';
+    let v = null;
+    try { v = window.prompt('Identity file (' + ['Linux', 'macOS', 'Windows'][rowIdx || 0] + '), e.g. ~/.ssh/id_ed25519:', (key.idFiles && key.idFiles[sk]) || ''); } catch (e) {}
+    if (v == null) return;
+    this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { idFiles: Object.assign({}, k.idFiles, { [sk]: v.trim() }) }) : k) }));
+  }
+
+  // Add a custom keyboard-interactive challenge/response pair.
+  okAddKbi() {
+    const key = this.state.oneKeys.find(k => k.id === this.state.activeKey); if (!key) return;
+    let c = null, r = null;
+    try { c = window.prompt('Challenge（服务器提示文本，如 "verification code:"）:', ''); } catch (e) {}
+    if (c == null || !c.trim()) return;
+    try { r = window.prompt('Response（自动应答内容）:', ''); } catch (e) {}
+    if (r == null) return;
+    this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { kbi: (k.kbi || []).concat({ challenge: c.trim(), response: r }) }) : k) }));
   }
 
   renderVals() {
@@ -2515,6 +2873,7 @@ class Component extends DCLogic {
       { label: 'Tool', build: (m) => [
         m('Sync Input…', null, 'Ctrl+Shift+M'),
         m('OneKeys…', () => this.setState({ oneKeyOpen: true }), 'Ctrl+T, Ctrl+K'),
+        m('Quick Commands…', () => this.openQuickMgr(), ''),
         m('Triggers…', null, 'Ctrl+T, Ctrl+T'),
         m('Tunnels…', null, 'Ctrl+T, Ctrl+U'),
         DIV,
@@ -2678,8 +3037,9 @@ class Component extends DCLogic {
       jump: () => this.setState({ activeMatch: m.gidx })
     }));
 
-    // ── chat ──
-    const chat = st.chat.map(m => ({
+    // ── chat (per-terminal conversation follows the active tab) ──
+    const thinkingNow = this.thinkingOf(st.activeTab);
+    const chat = this.chatOf(st.activeTab).map(m => ({
       user: m.kind === 'user', op: m.kind === 'op', cmd: m.kind === 'cmd', prop: m.kind === 'prop',
       text: m.text, cmdText: m.cmdText, note: m.note, meta: m.meta, stepLabel: m.stepLabel,
       quote: m.quote || '',
@@ -2713,13 +3073,43 @@ class Component extends DCLogic {
       toggle: () => this.setState(s => ({ guards: s.guards.map((x, j) => j === i ? Object.assign({}, x, { on: !x.on }) : x) }))
     }));
 
-    const dlgTypeList = ['SSH', 'Serial'].map(tp => ({
+    const dlgTypeList = ['Shell', 'SSH', 'Telnet', 'Serial'].map(tp => ({
       label: tp,
       bc: st.dlg.type === tp ? 'var(--color-accent)' : 'transparent',
+      bg: st.dlg.type === tp ? 'var(--color-bg)' : 'transparent',
       c: st.dlg.type === tp ? 'var(--color-text)' : 'var(--color-neutral-600)',
       w: st.dlg.type === tp ? '600' : '400',
-      pick: () => this.setState(s => ({ dlg: Object.assign({}, s.dlg, { type: tp, host: tp === 'Serial' ? 'COM3' : (tp === 'AI Agent' ? '' : s.dlg.host === 'COM3' ? '10.0.4.13' : s.dlg.host) }) }))
+      pick: () => this.setState(s => {
+        const d = Object.assign({}, s.dlg, { type: tp });
+        if (tp === 'Serial' && !/^(COM|\/dev)/.test(d.host || '')) d.host = 'COM3';
+        if (tp !== 'Serial' && /^(COM|\/dev)/.test(d.host || '')) d.host = '';
+        if (tp === 'Telnet' && d.port === '22') d.port = '23';
+        if (tp === 'SSH' && d.port === '23') d.port = '22';
+        return { dlg: d };
+      })
     }));
+    // WindTerm-style settings tree in the New Session dialog (visual grouping)
+    const dlgTree = (() => {
+      const t = st.dlg.type;
+      const rows = [{ label: 'Session', indent: 0, head: false, active: true }];
+      const add = (label, indent, head) => rows.push({ label, indent, head: !!head, active: false });
+      add('Terminal', 0, true); ['Bell', 'Mode', 'Keyboard', 'Security', 'Logging'].forEach(l => add(l, 1));
+      add('Window', 0, true); add('Selection', 1);
+      if (t === 'SSH') {
+        add('SSH', 0, true);
+        ['Connection', 'Proxy', 'Authentication', 'Agent', 'Ciphers', 'Key Exchange', 'MAC Hashes', 'Public Keys', 'SFTP', 'X11'].forEach(l => add(l, 1));
+        add('X/Y/Z Modem', 0, true);
+      } else if (t === 'Telnet') { add('Telnet', 0, true); add('Connection', 1); }
+      else if (t === 'Serial') { add('Serial', 0, true); ['Port', 'Flow Control'].forEach(l => add(l, 1)); add('X/Y/Z Modem', 0, true); }
+      else { add('Shell', 0, true); add('Environment', 1); }
+      return rows.map(r => ({
+        label: r.label,
+        pad: (r.indent ? 38 : 16) + 'px',
+        arrow: r.head ? '▾' : '',
+        c: r.active ? 'var(--color-text)' : 'var(--color-neutral-600)',
+        bg: r.active ? 'var(--color-neutral-200)' : 'transparent'
+      }));
+    })();
     const setDlg = (k) => (e) => { const v = e.target.value; this.setState(s => ({ dlg: Object.assign({}, s.dlg, { [k]: v }) })); };
 
     const recFileName = (active ? active.name : 'session') + '_' + new Date().toISOString().slice(0, 10) + '.log';
@@ -2735,10 +3125,25 @@ class Component extends DCLogic {
     }));
     const setKeyField = (field) => (e) => { const v = e.target.value; this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { [field]: v }) : k) })); };
     const okTabs = ['SSH', 'Account', 'Sessions'].map(t => ({
-      label: t, bc: st.oneKeyTab === t ? 'var(--color-accent)' : 'transparent',
+      label: t,
+      bc: st.oneKeyTab === t ? 'var(--color-accent)' : 'transparent',
+      bg: st.oneKeyTab === t ? 'var(--color-bg)' : 'transparent',
+      dot: st.oneKeyTab === t ? 'var(--color-accent-2)' : 'transparent',
       c: st.oneKeyTab === t ? 'var(--color-text)' : 'var(--color-neutral-600)',
       w: st.oneKeyTab === t ? '600' : '400', pick: () => this.setState({ oneKeyTab: t })
     }));
+    // Public Key rows: per-system identity file, empty until the user sets one
+    const okSysRows = [['linux', 'Linux'], ['mac', 'macOS'], ['win', 'Windows']];
+    const okKeys = okSysRows.map(([sk, label], i) => ({
+      system: label,
+      file: (activeKeyObj.idFiles && activeKeyObj.idFiles[sk]) || '',
+      bg: st.okKeySel === i ? 'var(--color-accent-100)' : 'transparent',
+      pick: () => this.setState({ okKeySel: i }),
+      modify: () => this.okModifyIdentity(i)
+    }));
+    const okKbiRows = [];
+    if (activeKeyObj.pwOn && activeKeyObj.pass) okKbiRows.push({ challenge: 'password:', response: '•••••• (auto)' });
+    (activeKeyObj.kbi || []).forEach(x => okKbiRows.push({ challenge: x.challenge, response: x.response ? '••••••' : '' }));
 
     // ── login dialog (on SSH connect) ──
 
@@ -2764,14 +3169,24 @@ class Component extends DCLogic {
       okReveal: st.okReveal, okRevealPw: () => this.setState(s => ({ okReveal: !s.okReveal })),
       okRevealIcon: st.okReveal ? 'hide' : 'show',
       okPwBg: activeKeyObj.pwOn ? 'var(--color-accent)' : 'var(--color-neutral-400)',
-      okPwKnob: activeKeyObj.pwOn ? '16px' : '2px',
+      okPwKnob: activeKeyObj.pwOn ? '18px' : '2px',
       okTogglePw: () => this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { pwOn: !k.pwOn }) : k) })),
-      okKeys: [
-        { system: 'This computer', file: '~/.ssh/id_ed25519', fileC: 'var(--color-text)' },
-        { system: 'This computer', file: '~/.ssh/id_rsa', fileC: 'var(--color-text)' },
-        { system: 'Agent', file: '(none selected)', fileC: 'var(--color-neutral-500)' }
-      ],
-      okAdd: () => { const id = 'k' + (++this.seq); this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name: 'new-onekey', user: 'user', pass: '', pwOn: true }), activeKey: id })); },
+      okTabSSH: st.oneKeyTab === 'SSH',
+      okTabOther: st.oneKeyTab !== 'SSH',
+      okTabHint: st.oneKeyTab === 'Account' ? 'Account 档案 — 即将支持。凭据请在 SSH 页管理。' : '按会话绑定 OneKey — 即将支持。',
+      okEmpty: st.oneKeys.length === 0,
+      okHasSel: st.oneKeys.length > 0,
+      okKeys, okKbiRows,
+      okKbiEmpty: okKbiRows.length === 0,
+      okModifyKey: () => this.okModifyIdentity(st.okKeySel),
+      okKbiAdd: () => this.okAddKbi(),
+      okRename: () => {
+        const k = st.oneKeys.find(x => x.id === st.activeKey); if (!k) return;
+        let v = null; try { v = window.prompt('OneKey 名称:', k.name); } catch (e) {}
+        if (v == null || !v.trim()) return;
+        this.setState(s => ({ oneKeys: s.oneKeys.map(x => x.id === s.activeKey ? Object.assign({}, x, { name: v.trim() }) : x) }));
+      },
+      okAdd: () => { const id = 'k' + (++this.seq); this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name: 'new-onekey', user: '', pass: '', pwOn: true, idFiles: {}, kbi: [] }), activeKey: id, okKeySel: 0 })); },
       okRemove: () => this.setState(s => { const rest = s.oneKeys.filter(k => k.id !== s.activeKey); this.persistOneKeys(rest); return { oneKeys: rest, activeKey: rest[0] ? rest[0].id : null }; }),
       okDuplicate: () => this.setState(s => { const src = s.oneKeys.find(k => k.id === s.activeKey); if (!src) return {}; const id = 'k' + (++this.seq); return { oneKeys: s.oneKeys.concat(Object.assign({}, src, { id, name: src.name + '-copy' })), activeKey: id }; }),
       saveOneKey: () => { this.persistOneKeys(); this.setState({ oneKeyOpen: false }); },
@@ -2816,11 +3231,78 @@ class Component extends DCLogic {
       onCmdHistQuery: (e) => this.setState({ cmdHistQuery: e.target.value }),
       cmdHistItems: this.histOf(st.activeTab)
         .filter(h => !st.cmdHistQuery.trim() || h.toLowerCase().includes(st.cmdHistQuery.trim().toLowerCase()))
-        .map(h => ({ cmd: h, use: () => { this.setState({ termDraft: h }); if (this.termInputRef.current) this.termInputRef.current.focus(); } })),
+        .map(h => ({ cmd: h, use: () => {
+          // real terminal: type the command into the PTY (no newline — user confirms with Enter)
+          if (this.xterm && this.xtermId && window.__TAURI__) { this.writeToPty(h); try { this.xterm.focus(); } catch (e) {} return; }
+          this.setState({ termDraft: h }); if (this.termInputRef.current) this.termInputRef.current.focus();
+        } })),
       // quick commands
       quickOpen: st.quickOpen,
       toggleQuick: () => this.setState(s => ({ quickOpen: !s.quickOpen })),
       quickCmds,
+      // quick command manager (groups + batch)
+      openQuickMgr: () => this.openQuickMgr(),
+      qmOpen: st.quickMgr.open,
+      qmGroup: st.quickMgr.group,
+      qmGroups: st.quickGroups.map(g => ({ v: g, label: g })),
+      onQmGroup: (e) => { const v = e.target.value; this.setState(s => ({ quickMgr: Object.assign({}, s.quickMgr, { group: v, sel: 0 }) })); },
+      qmAddGroup: () => {
+        let v = null; try { v = window.prompt('新分组名称:', ''); } catch (e) {}
+        if (v == null || !v.trim()) return; v = v.trim();
+        this.setState(s => ({
+          quickGroups: s.quickGroups.includes(v) ? s.quickGroups : s.quickGroups.concat(v),
+          quickMgr: Object.assign({}, s.quickMgr, { group: v, sel: 0 })
+        }));
+      },
+      qmRemoveGroup: () => {
+        if (st.quickGroups.length <= 1) return;
+        const g = st.quickMgr.group;
+        this.setState(s => {
+          const groups = s.quickGroups.filter(x => x !== g);
+          return {
+            quickGroups: groups,
+            quickCmds: s.quickCmds.filter(q => (q.group || 'Quick') !== g),
+            quickMgr: Object.assign({}, s.quickMgr, { group: groups[0], sel: 0 })
+          };
+        });
+      },
+      qmRemoveGroupC: st.quickGroups.length > 1 ? 'var(--color-neutral-600)' : 'var(--color-neutral-400)',
+      qmRenameGroup: () => {
+        const g = st.quickMgr.group;
+        let v = null; try { v = window.prompt('分组名称:', g); } catch (e) {}
+        if (v == null || !v.trim() || v.trim() === g) return; v = v.trim();
+        this.setState(s => ({
+          quickGroups: s.quickGroups.map(x => x === g ? v : x),
+          quickCmds: s.quickCmds.map(q => (q.group || 'Quick') === g ? Object.assign({}, q, { group: v }) : q),
+          quickMgr: Object.assign({}, s.quickMgr, { group: v })
+        }));
+      },
+      qmList: this.qmCmds().map((q, i) => {
+        const selIdx = Math.max(0, Math.min(st.quickMgr.sel, this.qmCmds().length - 1));
+        return {
+          label: q.label || '(untitled)',
+          bg: i === selIdx ? 'var(--color-accent-100)' : 'transparent',
+          w: i === selIdx ? '600' : '400',
+          pick: () => this.setState(s => ({ quickMgr: Object.assign({}, s.quickMgr, { sel: i }) }))
+        };
+      }),
+      qmEmpty: this.qmCmds().length === 0,
+      qmHasSel: !!this.qmSelObj(),
+      qmAdd: () => this.setState(s => {
+        const list = s.quickCmds.concat({ id: 'q' + (++this.seq), label: 'Untitled', cmd: '', group: s.quickMgr.group });
+        const n = list.filter(q => (q.group || 'Quick') === s.quickMgr.group).length;
+        return { quickCmds: list, quickMgr: Object.assign({}, s.quickMgr, { sel: n - 1 }) };
+      }),
+      qmDel: () => { const sel = this.qmSelObj(); if (!sel) return; this.setState(s => ({ quickCmds: s.quickCmds.filter(q => q.id !== sel.id), quickMgr: Object.assign({}, s.quickMgr, { sel: Math.max(0, s.quickMgr.sel - 1) }) })); },
+      qmUp: () => this.qmMove(-1),
+      qmDown: () => this.qmMove(1),
+      qmDup: () => { const sel = this.qmSelObj(); if (!sel) return; this.setState(s => { const list = s.quickCmds.concat(Object.assign({}, sel, { id: 'q' + (++this.seq), label: sel.label + ' copy' })); const n = list.filter(q => (q.group || 'Quick') === s.quickMgr.group).length; return { quickCmds: list, quickMgr: Object.assign({}, s.quickMgr, { sel: n - 1 }) }; }); },
+      qmLabel: this.qmSelObj() ? (this.qmSelObj().label || '') : '',
+      onQmLabel: (e) => { const v = e.target.value; this.qmPatchSel({ label: v }); },
+      qmText: this.qmSelObj() ? (this.qmSelObj().cmd || '') : '',
+      onQmText: (e) => { const v = e.target.value; this.qmPatchSel({ cmd: v }); },
+      qmCancel: () => { const b = this._quickBackup; this.setState(s => ({ quickCmds: b ? b.cmds : s.quickCmds, quickGroups: b ? b.groups : s.quickGroups, quickMgr: { open: false, group: 'Quick', sel: 0 } })); },
+      qmOk: () => this.setState(s => ({ quickMgr: Object.assign({}, s.quickMgr, { open: false }) })),
       // quick-command right-click editor
       qctxOpen: st.quickCtx.open, qctxX: st.quickCtx.x + 'px', qctxY: st.quickCtx.y + 'px',
       closeQctx: () => this.setState({ quickCtx: { open: false, x: 0, y: 0, id: null } }),
@@ -2832,7 +3314,7 @@ class Component extends DCLogic {
       qeditCmd: st.quickEdit.cmd, onQeditCmd: (e) => { const v = e.target.value; this.setState(s => ({ quickEdit: Object.assign({}, s.quickEdit, { cmd: v }) })); },
       closeQedit: () => this.setState({ quickEdit: { open: false, id: null, label: '', cmd: '' } }),
       saveQedit: () => this.setState(s => ({
-        quickCmds: s.quickCmds.map(q => q.id === s.quickEdit.id ? { id: q.id, label: (s.quickEdit.label.trim() || s.quickEdit.cmd.trim() || q.label), cmd: s.quickEdit.cmd.trim() || q.cmd } : q),
+        quickCmds: s.quickCmds.map(q => q.id === s.quickEdit.id ? Object.assign({}, q, { label: (s.quickEdit.label.trim() || s.quickEdit.cmd.trim() || q.label), cmd: s.quickEdit.cmd.trim() || q.cmd }) : q),
         quickEdit: { open: false, id: null, label: '', cmd: '' }
       })),
       addQuick: () => this.addQuickFromDraft(),
@@ -3077,7 +3559,7 @@ class Component extends DCLogic {
       termDrop: (e) => { e.preventDefault(); this.setState({ dragOver: false }); this.dropUpload(e.dataTransfer && e.dataTransfer.files ? e.dataTransfer.files : []); },
       // search (bottom find bar)
       searchOpen: st.searchOpen,
-      toggleSearch: () => this.setState(s => ({ searchOpen: !s.searchOpen, logQuery: s.searchOpen ? '' : s.logQuery, activeMatch: 0 })),
+      toggleSearch: () => this.setState(s => ({ searchOpen: !s.searchOpen, logQuery: s.searchOpen ? '' : s.logQuery, activeMatch: 0 }), () => { this._xtermMatchIdx = -1; this.xtermScanMatches(); this.renderXtermTicks(); }),
       // sender (bottom panel)
       senderOpen: st.senderOpen,
       toggleSender: () => { if (st.sender.running) { clearTimeout(this.senderTimer); } this.setState(s => ({ senderOpen: !s.senderOpen, sender: Object.assign({}, s.sender, { running: false }) })); },
@@ -3101,7 +3583,7 @@ class Component extends DCLogic {
       senderStatusC: st.sender.running ? 'var(--color-accent-2-700)' : 'var(--color-neutral-500)',
       searchIconC: st.searchOpen || lq ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
       logQuery: st.logQuery,
-      onLogQuery: (e) => { const v = e.target.value; this.setState({ logQuery: v, activeMatch: 0 }, () => this.xtermFind(true)); },
+      onLogQuery: (e) => { const v = e.target.value; this._xtermMatchIdx = -1; this.setState({ logQuery: v, activeMatch: 0 }, () => this.xtermFind(true)); },
       onSearchKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this.commitFindHist(); if (this.xtermSearch && this.xterm) { this.xtermFind(!e.shiftKey); return; } if (total > 0) this.setState({ activeMatch: e.shiftKey ? (activeM - 1 + total) % total : (activeM + 1) % total }); } },
       prevMatch: () => { this.commitFindHist(); if (this.xtermSearch && this.xterm) { this.xtermFind(false); return; } if (total > 0) this.setState({ activeMatch: (activeM - 1 + total) % total }); },
       nextMatch: () => { this.commitFindHist(); if (this.xtermSearch && this.xterm) { this.xtermFind(true); return; } if (total > 0) this.setState({ activeMatch: (activeM + 1) % total }); },
@@ -3118,12 +3600,13 @@ class Component extends DCLogic {
         c: o.on ? 'var(--color-bg)' : 'var(--color-neutral-600)',
         bg: o.on ? 'var(--color-accent)' : 'transparent',
         toggle: () => {
+          this._xtermMatchIdx = -1;
           if (o.key === 'findInSel' && !st.findInSel) {
             let selText = '';
             try { selText = String(window.getSelection()); } catch (e) {}
-            this.setState({ findInSel: true, findSelText: selText, activeMatch: 0 });
+            this.setState({ findInSel: true, findSelText: selText, activeMatch: 0 }, () => this.xtermFind(true));
           } else {
-            this.setState(s => ({ [o.key]: !s[o.key], activeMatch: 0 }));
+            this.setState(s => ({ [o.key]: !s[o.key], activeMatch: 0 }), () => this.xtermFind(true));
           }
         }
       })),
@@ -3134,7 +3617,10 @@ class Component extends DCLogic {
       findHist: st.findHist.map(q => ({ q, use: () => this.setState({ logQuery: q, activeMatch: 0, findHistOpen: false }) })),
       minimapOn: st.searchOpen && !!lq && total > 0,
       ticks,
-      matchCount,
+      // real terminal: n/m comes from the xterm buffer scan; fake terminal keeps its own count
+      matchCount: (this.xterm && this.xtermAvailable())
+        ? (lq ? (this._xtermTotal > 0 ? ((this._xtermMatchIdx >= 0 ? this._xtermMatchIdx : 0) + 1) + ' / ' + this._xtermTotal : 'none') : '')
+        : matchCount,
       // recording
       recActive: st.recActive,
       recWord: st.recActive ? 'recording' : 'record',
@@ -3175,7 +3661,8 @@ class Component extends DCLogic {
       manBg: auto ? 'transparent' : 'var(--color-accent)', manFg: auto ? 'var(--color-text)' : 'var(--color-bg)',
       modeHint: auto ? 'auto · runs and records' : 'manual · waits for you',
       modeWord: st.aiMode, modeNote: auto ? 'commands run automatically unless a guardrail flags them.' : 'every command waits for your approval.',
-      chat, thinking: st.thinking,
+      chat, thinking: thinkingNow,
+      clearChat: () => this.clearAiChat(),
       // quote chip + selection bar + slash + schedules
       hasQuote: !!st.quote,
       quoteText: st.quote.length > 300 ? st.quote.slice(0, 300) + '…' : st.quote,
@@ -3201,7 +3688,8 @@ class Component extends DCLogic {
         { cmd: '/mcp', desc: '列出 MCP · /mcp pin <name> 置顶 · @name 调用' },
         { cmd: '/skills', desc: '查看已安装 skills' },
         { cmd: '/workflows', desc: '查看工作流' },
-        { cmd: '/schedule', desc: '/schedule 30s|5min|14:30 <消息>' }
+        { cmd: '/schedule', desc: '/schedule 30s|5min|14:30 <消息>' },
+        { cmd: '/clear', desc: '清除当前终端的 AI 会话，重新开始' }
       ].filter(x => x.cmd.startsWith(st.draft.trim()) || st.draft.trim() === '/').map(x => ({ cmd: x.cmd, desc: x.desc, pick: () => this.setState({ draft: x.cmd + ' ' }) })),
       // timers manager + skills/mcp panels
       toggleTimers: () => this.setState(s => ({ timersOpen: !s.timersOpen, timerForm: null, timerQuery: '' })),
@@ -3292,7 +3780,7 @@ class Component extends DCLogic {
       draft: st.draft, onDraft: (e) => this.setState({ draft: e.target.value }),
       onDraftKey: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } },
       sendChat: () => this.send(),
-      chatBusy: st.thinking, chatIdle: !st.thinking,
+      chatBusy: thinkingNow, chatIdle: !thinkingNow,
       stopChat: () => this.stopOpencode(),
       composerPh: 'Tell the Operator what to do on ' + (active ? active.name : 'this session') + '…',
       // sessions view
@@ -3309,9 +3797,12 @@ class Component extends DCLogic {
       stop: (e) => e.stopPropagation(),
       connectDialog: () => this.connectDialog(),
       dlgTypes: dlgTypeList,
-      dlgIsNet: st.dlg.type === 'SSH',
+      dlgTree,
+      dlgIsNet: st.dlg.type === 'SSH' || st.dlg.type === 'Telnet',
+      dlgIsShell: st.dlg.type === 'Shell',
       dlgIsSerial: st.dlg.type === 'Serial',
       dlgIsOther: false,
+      dlgEditDefaults: () => this.setState({ dialogOpen: false, view: 'settings' }),
       dlgSystem: st.dlg.system, onDlgSystem: setDlg('system'),
       dlgSysmonBg: st.dlg.sysmon ? 'var(--color-accent)' : 'var(--color-neutral-400)',
       dlgSysmonKnob: st.dlg.sysmon ? '16px' : '2px',
