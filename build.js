@@ -32,6 +32,7 @@ const html = `<!DOCTYPE html>
 <script src="./vendor/react-dom.production.min.js"></script>
 <script src="./vendor/xterm/xterm.js"></script>
 <script src="./vendor/xterm/addon-fit.js"></script>
+<script src="./vendor/xterm/addon-search.js"></script>
 <script src="./vendor/zmodem/zmodem.js"></script>
 <script src="./support.js"></script>
 </head>
@@ -56,6 +57,7 @@ copy('vendor/react.production.min.js');
 copy('vendor/react-dom.production.min.js');
 copy('vendor/xterm/xterm.js');
 copy('vendor/xterm/addon-fit.js');
+copy('vendor/xterm/addon-search.js');
 copy('vendor/xterm/xterm.css');
 copy('vendor/zmodem/zmodem.js');
 copy('assets/broadsheet.css');

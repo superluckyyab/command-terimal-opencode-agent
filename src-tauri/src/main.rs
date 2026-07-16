@@ -170,6 +170,12 @@ fn pty_kill(id: String, state: State<PtyState>) -> Result<(), String> {
     Ok(())
 }
 
+// Read an arbitrary local file (used to upload a dropped file over zmodem).
+#[tauri::command]
+fn read_file(path: String) -> Result<Vec<u8>, String> {
+    std::fs::read(&path).map_err(|e| e.to_string())
+}
+
 fn dirs_home() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -241,7 +247,7 @@ fn main() {
     tauri::Builder::default()
         .manage(PtyState::default())
         .invoke_handler(tauri::generate_handler![
-            pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill, run_command
+            pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill, run_command, read_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -508,14 +508,18 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         <textarea class="input" rows="2" placeholder="{{ composerPh }}" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}"></textarea>
         <div style="display:flex;align-items:center;gap:8px">
           <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:150px;height:30px;font-size:12px;padding:2px 8px">
-            <sc-for list="{{ modelOpts }}" as="mo" hint-placeholder-count="5"><option value="{{ mo.v }}">{{ mo.label }}</option></sc-for>
-            <option value="__add__">+ Add model…</option>
+            <sc-for list="{{ modelOpts }}" as="mo" hint-placeholder-count="1"><option value="{{ mo.v }}">{{ mo.label }}</option></sc-for>
           </select>
           <select class="input" value="{{ aiMode }}" onChange="{{ onModeSelect }}" style="width:auto;height:30px;font-size:12.5px;padding:2px 8px;margin-left:auto">
             <option value="manual">Manual</option>
             <option value="auto">Auto</option>
           </select>
-          <button class="btn btn-primary" style="padding-block:6px" onClick="{{ sendChat }}">Send</button>
+          <sc-if value="{{ chatBusy }}" hint-placeholder-val="{{ false }}">
+            <button class="btn btn-secondary" style="padding-block:6px;color:var(--color-accent-2-700);border-color:var(--color-accent-2-400)" onClick="{{ stopChat }}">⏹ Stop</button>
+          </sc-if>
+          <sc-if value="{{ chatIdle }}" hint-placeholder-val="{{ true }}">
+            <button class="btn btn-primary" style="padding-block:6px" onClick="{{ sendChat }}">Send</button>
+          </sc-if>
         </div>
       </div>
     </div>
@@ -1115,7 +1119,7 @@ class Component extends DCLogic {
       findHistOpen: false,
       findHist: [],
       pinnedIds: {},
-      dark: false,
+      dark: true,
       ctx: { open: false, x: 0, y: 0, id: null },
       tabCtx: { open: false, x: 0, y: 0, id: null },
       tabListOpen: false,
@@ -1201,7 +1205,7 @@ class Component extends DCLogic {
         { label: 'Outbound network calls — curl, wget, scp', on: false }
       ],
       model: 'opencode',
-      models: ['opencode', 'claude-sonnet-4', 'claude-opus-4', 'gpt-4o', 'deepseek-v3', 'qwen-max'],
+      models: ['opencode'],
       recDirListOn: false,
       termSel: 0,
       termSuggHide: false,
@@ -1301,6 +1305,7 @@ class Component extends DCLogic {
     });
     let fit = null;
     try { fit = new window.FitAddon.FitAddon(); term.loadAddon(fit); } catch (e) {}
+    try { this.xtermSearch = new window.SearchAddon.SearchAddon(); term.loadAddon(this.xtermSearch); } catch (e) { this.xtermSearch = null; }
     term.open(host);
     try { if (fit) fit.fit(); } catch (e) {}
     this.xterm = term; this.xtermFit = fit;
@@ -1330,10 +1335,21 @@ class Component extends DCLogic {
     if (listen) {
       listen('pty://data', ev => { const p = ev.payload; if (p && p.id === this.xtermId) this.onPtyData(p.data); }).then(un => { this.xtermUnData = un; });
       listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === this.xtermId) { this._ptyDead = true; term.write('\r\n\x1b[33m[连接已断开 — 按 Enter 重新连接]\x1b[0m\r\n'); } }).then(un => { this.xtermUnExit = un; });
-      // OS file drop → paste the path(s) into the terminal
-      listen('tauri://file-drop', ev => {
-        const paths = ev.payload; if (!Array.isArray(paths) || !this.xtermId) return;
-        this.writeToPty(paths.map(p => /\s/.test(p) ? '"' + p + '"' : p).join(' ') + ' ');
+      // OS file drop → upload the file(s) to the remote via zmodem (rz)
+      listen('tauri://file-drop', async ev => {
+        const paths = ev.payload; if (!Array.isArray(paths) || !paths.length || !this.xtermId) return;
+        try {
+          const files = [];
+          for (const p of paths) {
+            const bytes = await invoke('read_file', { path: p });
+            files.push(new File([new Uint8Array(bytes)], p.replace(/^.*[\\/]/, '')));
+          }
+          this._pendingUploads = files;
+          this.writeToPty('rz\r'); // remote starts receiving; the sentry sends the dropped files
+        } catch (e) {
+          // fallback: just paste the path
+          this.writeToPty(paths.map(p => /\s/.test(p) ? '"' + p + '"' : p).join(' ') + ' ');
+        }
       }).then(un => { this.xtermUnDrop = un; });
     }
     this.xtermResize = () => { try { if (this.xtermFit) this.xtermFit.fit(); } catch (e) {} };
@@ -1365,10 +1381,12 @@ class Component extends DCLogic {
       const pw = this._pendPass;
       setTimeout(() => this.writeToPty(pw + '\n'), 120);
     }
-    // colorize only clean, digit-bearing ASCII-ish chunks; otherwise write raw
-    // bytes so xterm reassembles split multibyte (e.g. CJK) sequences correctly.
+    // Client-side quick color, but only on plain chunks: skip if the chunk already
+    // carries server SGR colors (don't fight ls --color / vim) or a split multibyte
+    // char (write raw bytes so xterm reassembles CJK correctly).
     const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
-    if (this.state.ipColor && inNormal && text && /\d/.test(text) && text.indexOf('�') < 0) term.write(this.ipColorize(text));
+    const hasSGR = /\x1b\[[0-9;]*m/.test(text);
+    if (this.state.ipColor && inNormal && text && !hasSGR && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text));
     else term.write(u8);
   }
 
@@ -1395,6 +1413,14 @@ class Component extends DCLogic {
       zsession.on('session_end', () => { try { term.write('\r\n'); } catch (e) {} });
       try { zsession.start(); } catch (e) {}
     } else {
+      // remote is receiving (rz) — use drag-dropped files if any, else pick files
+      if (this._pendingUploads && this._pendingUploads.length) {
+        const files = this._pendingUploads; this._pendingUploads = null;
+        window.Zmodem.Browser.send_files(zsession, files, { on_progress: () => {} })
+          .then(() => { try { zsession.close(); } catch (e) {} })
+          .catch(() => { try { zsession.close(); } catch (e) {} });
+        return;
+      }
       const input = document.createElement('input');
       input.type = 'file'; input.multiple = true; input.style.display = 'none';
       document.body.appendChild(input);
@@ -1411,10 +1437,26 @@ class Component extends DCLogic {
     }
   }
 
-  // WindTerm-style quick color: highlight IPv4 addresses. Reset with 39 (default
-  // fg) so it doesn't clobber other attributes. Only used on the normal buffer.
+  // WindTerm-style client-side quick color: single left-to-right pass so inserted
+  // escape codes are never re-scanned. Applied only to plain (un-colored) chunks
+  // — see termWriteOut — so it doesn't fight the server's own ANSI colors.
   ipColorize(text) {
-    return text.replace(/(?<![\w.])((?:\d{1,3}\.){3}\d{1,3})(?![\w.])/g, '\x1b[38;5;80m$1\x1b[39m');
+    const C = (code, s) => '\x1b[' + code + 'm' + s + '\x1b[39m';
+    return text.replace(
+      /(https?:\/\/[^\s'"()<>]+)|(\b(?:\d{1,3}\.){3}\d{1,3}\b)|(\b0x[0-9a-fA-F]+\b|#[0-9a-fA-F]{3,8}\b)|('[^'\n]*'|"[^"\n]*")|(\b(?:ERROR|ERR|FAIL(?:ED)?|FATAL|CRITICAL|DENIED|REFUSED)\b)|(\b(?:WARN(?:ING)?)\b)|(\b(?:SUCCESS|PASS(?:ED)?|OK|ACTIVE|RUNNING|ENABLED|LISTENING)\b)|(\b(?:INFO|DEBUG|NOTICE)\b)|(\b\d+(?:\.\d+)?\b)/g,
+      (m, url, ip, hex, str, err, warn, ok, info, num) => {
+        if (url) return C('38;5;39', url);
+        if (ip) return C('38;5;80', ip);
+        if (hex) return C('38;5;171', hex);
+        if (str) return C('38;5;114', str);
+        if (err) return C('38;5;203', err);
+        if (warn) return C('38;5;214', warn);
+        if (ok) return C('38;5;114', ok);
+        if (info) return C('38;5;45', info);
+        if (num) return C('38;5;179', num);
+        return m;
+      }
+    );
   }
 
   writeToPty(data) {
@@ -1426,6 +1468,15 @@ class Component extends DCLogic {
   }
 
   terminalText() { return this._scroll || ''; }
+
+  // Find in the real terminal via the xterm search addon.
+  xtermFind(forward) {
+    if (!this.xtermSearch || !this.xterm) return false;
+    const q = this.state.logQuery; if (!q) return false;
+    const opts = { caseSensitive: !!this.state.findCase, wholeWord: !!this.state.findWord, regex: !!this.state.findRegex };
+    try { if (forward) this.xtermSearch.findNext(q, opts); else this.xtermSearch.findPrevious(q, opts); } catch (e) {}
+    return true;
+  }
 
   // Keep the xterm element attached to the current host (survives view switches),
   // and reconnect the PTY when the active tab changes to a different session.
@@ -1816,6 +1867,8 @@ class Component extends DCLogic {
 
   runQuick(cmd) {
     this.setState({ quickOpen: false });
+    // run in the real terminal when available; otherwise the scripted fallback
+    if (this.xterm && this.xtermId && window.__TAURI__) { this.writeToPty(cmd + '\n'); return; }
     if (this.state.activeTab) this.execLocal(cmd);
   }
 
@@ -1969,9 +2022,11 @@ class Component extends DCLogic {
   async askOpencode(sessName, goal) {
     if (!window.__TAURI__) { this.setState({ thinking: false }); this.opSay('opencode 需要在桌面应用中运行(浏览器预览下不可用)。', true); return; }
     if (!goal) { const u = this.state.chat.slice().reverse().find(m => m.kind === 'user'); goal = u ? u.text : ''; }
+    this._opStop = false;
     this.setState({ thinking: true });
     const maxSteps = 10;
     for (let step = 0; step < maxSteps; step++) {
+      if (this._opStop) { this.setState({ thinking: false }); return; }
       const scroll = this.terminalText();
       const prompt =
         'You are an autonomous operator driving a REMOTE terminal (SSH session "' + sessName + '").\n' +
@@ -1985,6 +2040,7 @@ class Component extends DCLogic {
       let reply;
       try { reply = await this.opencodeOnce(prompt); }
       catch (e) { this.setState({ thinking: false }); this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认已安装并登录 opencode。', true); return; }
+      if (this._opStop) { this.setState({ thinking: false }); return; }
       reply = String(reply || '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
       const mm = reply.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
       const cmd = mm ? mm[1].trim() : '';
@@ -2018,6 +2074,14 @@ class Component extends DCLogic {
       .then(res => (res && res.stdout && res.stdout.trim()) ? res.stdout : ((res && res.stderr) || ''));
   }
 
+  // Stop the autonomous loop and interrupt any command running in the terminal.
+  stopOpencode() {
+    this._opStop = true;
+    this.writeToPty('\x03');
+    this.setState({ thinking: false });
+    this.opSay('⏹ 已停止。', true);
+  }
+
   // Write a command to the SSH PTY and resolve once it has finished. Completion
   // is detected via a unique marker echoed after the command: the marker appears
   // once in the shell's input echo and again in the command's output, so we wait
@@ -2030,6 +2094,7 @@ class Component extends DCLogic {
       const start = Date.now();
       let lastLen = -1, lastChange = Date.now(), seen = false;
       const check = () => {
+        if (this._opStop) { resolve(); return; }
         const s = this.terminalText();
         if (s.length !== lastLen) { lastLen = s.length; lastChange = Date.now(); }
         if ((s.split(marker).length - 1) >= 2) seen = true;
@@ -2990,10 +3055,10 @@ class Component extends DCLogic {
       senderStatusC: st.sender.running ? 'var(--color-accent-2-700)' : 'var(--color-neutral-500)',
       searchIconC: st.searchOpen || lq ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
       logQuery: st.logQuery,
-      onLogQuery: (e) => this.setState({ logQuery: e.target.value, activeMatch: 0 }),
-      onSearchKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this.commitFindHist(); if (total > 0) this.setState({ activeMatch: e.shiftKey ? (activeM - 1 + total) % total : (activeM + 1) % total }); } },
-      prevMatch: () => { this.commitFindHist(); if (total > 0) this.setState({ activeMatch: (activeM - 1 + total) % total }); },
-      nextMatch: () => { this.commitFindHist(); if (total > 0) this.setState({ activeMatch: (activeM + 1) % total }); },
+      onLogQuery: (e) => { const v = e.target.value; this.setState({ logQuery: v, activeMatch: 0 }, () => this.xtermFind(true)); },
+      onSearchKey: (e) => { if (e.key === 'Enter') { e.preventDefault(); this.commitFindHist(); if (this.xtermSearch && this.xterm) { this.xtermFind(!e.shiftKey); return; } if (total > 0) this.setState({ activeMatch: e.shiftKey ? (activeM - 1 + total) % total : (activeM + 1) % total }); } },
+      prevMatch: () => { this.commitFindHist(); if (this.xtermSearch && this.xterm) { this.xtermFind(false); return; } if (total > 0) this.setState({ activeMatch: (activeM - 1 + total) % total }); },
+      nextMatch: () => { this.commitFindHist(); if (this.xtermSearch && this.xterm) { this.xtermFind(true); return; } if (total > 0) this.setState({ activeMatch: (activeM + 1) % total }); },
       navColor: total > 0 ? 'var(--color-accent-700)' : 'var(--color-neutral-400)',
       navCursor: total > 0 ? 'pointer' : 'default',
       // find options (regex / case / word / in-selection) + history
@@ -3181,6 +3246,8 @@ class Component extends DCLogic {
       draft: st.draft, onDraft: (e) => this.setState({ draft: e.target.value }),
       onDraftKey: (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(); } },
       sendChat: () => this.send(),
+      chatBusy: st.thinking, chatIdle: !st.thinking,
+      stopChat: () => this.stopOpencode(),
       composerPh: 'Tell the Operator what to do on ' + (active ? active.name : 'this session') + '…',
       // sessions view
       mgrRows,
