@@ -1952,37 +1952,72 @@ class Component extends DCLogic {
     this.setState(s => ({ chat: s.chat.concat({ id: ++this.seq, kind: 'op', text, mono: !!mono, runCmd: runCmd || '' }) }));
   }
 
-  // Drive the installed `opencode` CLI (opencode run --auto), feeding it the
-  // current terminal output + recent chat via stdin, and showing its reply.
-  // opencode reads our terminal (context) and can push commands back to it
-  // (fenced command → "Run in terminal" button). Needs opencode on the machine.
-  async askOpencode(sessName) {
+  // Autonomous agent loop driven by the installed opencode CLI: opencode decides
+  // the next shell command from the terminal state, we AUTO-run it in the SSH PTY,
+  // read the result, and loop — no manual "Run" clicks, no cmd windows. This is
+  // the IDE-style, multi-step opencode behaviour, executing on the connected
+  // session (not the local machine).
+  async askOpencode(sessName, goal) {
     if (!window.__TAURI__) { this.setState({ thinking: false }); this.opSay('opencode 需要在桌面应用中运行(浏览器预览下不可用)。', true); return; }
-    const invoke = window.__TAURI__.invoke;
-    const scroll = this.terminalText();
-    const history = this.state.chat
-      .filter(m => (m.kind === 'user' || m.kind === 'op') && m.text)
-      .slice(-8)
-      .map(m => (m.kind === 'user' ? 'User: ' : 'Assistant: ') + m.text)
-      .join('\n');
-    let prompt = 'You are an operations assistant attached to the terminal session "' + sessName + '".\n';
-    if (scroll && scroll.trim()) prompt += '\nCurrent terminal output (most recent last):\n' + scroll.slice(-3000) + '\n';
-    prompt += '\nConversation so far:\n' + history + '\n\nAnswer the latest user message. Put any shell command to run on its own line in a fenced code block.';
-    try {
-      const res = await invoke('run_command', { program: 'opencode', args: ['run', '--auto'], input: prompt, cwd: null });
-      this.setState({ thinking: false });
-      let out = (res && res.stdout && res.stdout.trim()) ? res.stdout : ((res && res.stderr) || '(opencode 无输出)');
-      out = out.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
-      if (res && res.code !== 0 && !(res.stdout && res.stdout.trim())) {
-        this.opSay('opencode 退出码 ' + res.code + ':\n' + out + '\n\n请确认已安装并登录 opencode。', true);
+    if (!goal) { const u = this.state.chat.slice().reverse().find(m => m.kind === 'user'); goal = u ? u.text : ''; }
+    this.setState({ thinking: true });
+    const maxSteps = 10;
+    for (let step = 0; step < maxSteps; step++) {
+      const scroll = this.terminalText();
+      const prompt =
+        'You are an autonomous operator driving a REMOTE terminal (SSH session "' + sessName + '").\n' +
+        'Look at the terminal output and decide the SINGLE next shell command needed to make progress on the goal.\n\n' +
+        (scroll && scroll.trim() ? 'Recent terminal output (most recent last):\n' + scroll.slice(-3500) + '\n\n' : '') +
+        'Goal: ' + goal + '\n\n' +
+        'Rules:\n' +
+        '- Reply with EXACTLY ONE next shell command wrapped in a ```bash code block, and nothing else.\n' +
+        '- When the goal is already satisfied by the output above, reply with a one-line summary starting with "DONE: " and NO code block.';
+      let reply;
+      try { reply = await this.opencodeOnce(prompt); }
+      catch (e) { this.setState({ thinking: false }); this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认已安装并登录 opencode。', true); return; }
+      reply = String(reply || '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
+      const mm = reply.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
+      const cmd = mm ? mm[1].trim() : '';
+      const isDone = /(^|\n)\s*DONE[:：]/i.test(reply) || !cmd;
+      if (isDone) {
+        this.setState({ thinking: false });
+        const summary = reply.replace(/```[\s\S]*?```/g, '').replace(/^[\s\S]*?DONE[:：]?/i, '').trim();
+        this.opSay(summary || reply || '(已完成)');
         return;
       }
-      const mm = out.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
-      this.opSay(out || '(空回复)', false, mm ? mm[1].trim() : '');
-    } catch (e) {
-      this.setState({ thinking: false });
-      this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认机器上已安装 opencode(例如 `npm i -g opencode-ai`)并已 `opencode auth login`。', true);
+      this.opSay('▶ ' + cmd, true);
+      await this.runInTerminalAndWait(cmd);
     }
+    this.setState({ thinking: false });
+    this.opSay('已自动执行 ' + maxSteps + ' 步后暂停。你可以继续追问,或说“继续”。');
+  }
+
+  opencodeOnce(prompt) {
+    return window.__TAURI__.invoke('run_command', { program: 'opencode', args: ['run', '--auto'], input: prompt, cwd: null })
+      .then(res => (res && res.stdout && res.stdout.trim()) ? res.stdout : ((res && res.stderr) || ''));
+  }
+
+  // Write a command to the SSH PTY and resolve once it has finished. Completion
+  // is detected via a unique marker echoed after the command: the marker appears
+  // once in the shell's input echo and again in the command's output, so we wait
+  // until it is seen twice and the output has settled.
+  runInTerminalAndWait(cmd) {
+    return new Promise((resolve) => {
+      if (!this.xtermId || !window.__TAURI__) { resolve(); return; }
+      const marker = 'OCDONE' + (++this.seq) + 'X';
+      this.writeToPty(cmd + '; echo ' + marker + '\n');
+      const start = Date.now();
+      let lastLen = -1, lastChange = Date.now(), seen = false;
+      const check = () => {
+        const s = this.terminalText();
+        if (s.length !== lastLen) { lastLen = s.length; lastChange = Date.now(); }
+        if ((s.split(marker).length - 1) >= 2) seen = true;
+        if (seen && Date.now() - lastChange > 700) { resolve(); return; }
+        if (Date.now() - start > 45000) { resolve(); return; }
+        setTimeout(check, 200);
+      };
+      setTimeout(check, 300);
+    });
   }
 
   // Real model call over an OpenAI-compatible endpoint (see Settings → API base URL / key).
@@ -2132,7 +2167,7 @@ class Component extends DCLogic {
         this.opSay('Using @' + mcp.name + ' MCP → ' + (atM[2] || 'ready') + '\n\n' + (mcp.name === 'kubernetes' ? 'kubectl get pods -n prod — 3 running, 0 pending. Deployment app-backend is healthy at rev 2.4.1.' : mcp.name === 'prometheus' ? 'query: rate(http_requests_total{code=~"5.."}[5m]) → 0.02/s and falling since the restart.' : mcp.name === 'github' ? 'Latest release v2.4.1 · 3 open PRs · CI green on main.' : 'Listed /var/log on web-01 — nginx/, journal/, audit/. Ready for file ops.'));
         return;
       }
-      if (this.state.model === 'opencode') { this.askOpencode(sessName); return; }
+      if (this.state.model === 'opencode') { this.askOpencode(sessName, quote ? quote + ' ' + text : text); return; }
       if (this.state.apiBase && this.state.apiKey) { this.askModel(sessName); return; }
       const pb = this.playbookFor(quote ? quote + ' ' + text : text, sessName);
       const plan = quote ? 'Looking at the output you referenced — ' + pb.plan : pb.plan;
