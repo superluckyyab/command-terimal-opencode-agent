@@ -8,7 +8,7 @@
   },
   "package": {
     "productName": "Wireline",
-    "version": "1.12.0"
+    "version": "1.13.0"
   },
   "tauri": {
     "allowlist": {
@@ -16,6 +16,11 @@
       "shell": {
         "all": false,
         "open": true
+      },
+      "dialog": {
+        "all": false,
+        "open": true,
+        "save": true
       }
     },
     "bundle": {

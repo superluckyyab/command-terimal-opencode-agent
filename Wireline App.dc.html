@@ -1607,44 +1607,69 @@ class Component extends DCLogic {
   }
 
   // A zmodem transfer was detected in the stream. `receive` = remote ran sz (we
-  // save files to disk); `send` = remote ran rz (we pick local files to upload).
+  // save the file); `send` = remote ran rz (we upload local files).
+  //
+  // Both directions use Tauri's NATIVE dialogs, not <input type=file> / a Blob
+  // download: the transfer is detected from PTY data, i.e. with no user gesture,
+  // and the webview blocks a file picker or download opened without one — which
+  // is why rz/sz previously just hung at "waiting to receive".
   onZmodem(detection) {
     const term = this.xterm;
+    const T = window.__TAURI__;
     let zsession;
     try { zsession = detection.confirm(); } catch (e) { return; }
+    const note = (s) => { try { term.write('\r\n\x1b[36m' + s + '\x1b[0m\r\n'); } catch (e) {} };
+
     if (zsession.type === 'receive') {
+      // sz on the remote → ask where to save, then write the bytes ourselves
       zsession.on('offer', (xfer) => {
+        const det = xfer.get_details();
         const chunks = [];
         xfer.on('input', (payload) => chunks.push(new Uint8Array(payload)));
-        xfer.accept().then(() => {
-          try { window.Zmodem.Browser.save_to_disk(chunks, xfer.get_details().name); } catch (e) {}
+        xfer.accept().then(async () => {
+          let total = 0; chunks.forEach(c => total += c.length);
+          const all = new Uint8Array(total);
+          let at = 0; chunks.forEach(c => { all.set(c, at); at += c.length; });
+          try {
+            const path = await T.dialog.save({ defaultPath: det.name });
+            if (!path) { note('已取消保存 ' + det.name); return; }
+            await T.invoke('write_file', { path, data: Array.from(all) });
+            note('已保存 ' + det.name + ' → ' + path);
+          } catch (e) { note('保存失败:' + (e.message || e)); }
         }).catch(() => {});
       });
       zsession.on('session_end', () => { try { term.write('\r\n'); } catch (e) {} });
       try { zsession.start(); } catch (e) {}
-    } else {
-      // remote is receiving (rz) — use drag-dropped files if any, else pick files
-      if (this._pendingUploads && this._pendingUploads.length) {
-        const files = this._pendingUploads; this._pendingUploads = null;
-        window.Zmodem.Browser.send_files(zsession, files, { on_progress: () => {} })
-          .then(() => { try { zsession.close(); } catch (e) {} })
-          .catch(() => { try { zsession.close(); } catch (e) {} });
-        return;
-      }
-      const input = document.createElement('input');
-      input.type = 'file'; input.multiple = true; input.style.display = 'none';
-      document.body.appendChild(input);
-      const cleanup = () => { try { document.body.removeChild(input); } catch (e) {} };
-      input.addEventListener('change', () => {
-        const files = Array.prototype.slice.call(input.files || []);
-        cleanup();
-        if (!files.length) { try { zsession.close(); } catch (e) {} return; }
-        window.Zmodem.Browser.send_files(zsession, files, { on_progress: () => {} })
-          .then(() => { try { zsession.close(); } catch (e) {} })
-          .catch(() => { try { zsession.close(); } catch (e) {} });
-      });
-      input.click();
+      return;
     }
+
+    // rz on the remote → send drag-dropped files, else ask the user to pick
+    const send = (files) => {
+      window.Zmodem.Browser.send_files(zsession, files, { on_progress: () => {} })
+        .then(() => { try { zsession.close(); } catch (e) {} note('上传完成'); })
+        .catch((e) => { try { zsession.close(); } catch (er) {} note('上传失败:' + (e && (e.message || e))); });
+    };
+    if (this._pendingUploads && this._pendingUploads.length) {
+      const files = this._pendingUploads; this._pendingUploads = null;
+      send(files);
+      return;
+    }
+    (async () => {
+      try {
+        const picked = await T.dialog.open({ multiple: true });
+        const paths = !picked ? [] : (Array.isArray(picked) ? picked : [picked]);
+        if (!paths.length) { try { zsession.close(); } catch (e) {} note('已取消上传'); return; }
+        const files = [];
+        for (const p of paths) {
+          const bytes = await T.invoke('read_file', { path: p });
+          files.push(new File([new Uint8Array(bytes)], p.replace(/^.*[\\/]/, '')));
+        }
+        send(files);
+      } catch (e) {
+        try { zsession.close(); } catch (er) {}
+        note('上传失败:' + (e && (e.message || e)));
+      }
+    })();
   }
 
   // WindTerm-style client-side quick color: single left-to-right pass so inserted
@@ -3537,6 +3562,10 @@ class Component extends DCLogic {
         const clearBuf = () => this.setState(s => ({ buffers: Object.assign({}, s.buffers, { [s.activeTab]: [] }) }));
         const q = encodeURIComponent(sel || lastCmd);
         return [
+          // Ask AI sits at the top of the menu, right where the pointer is —
+          // it used to be a floating bar that mispositioned to the window corner
+          it('Ask AI', sel ? () => this.setState({ quote: sel, aiCollapsed: false }) : null, ''),
+          div,
           it('Copy', sel ? () => cp(sel) : null, 'Shift+Del'),
           it('Copy Command', lastCmd ? () => cp(lastCmd) : null),
           it('Paste', () => { try { navigator.clipboard.readText().then(t => this.setState(s => ({ termDraft: s.termDraft + t }))); } catch (e) {} }, 'Shift+Ins'),
@@ -3770,7 +3799,9 @@ class Component extends DCLogic {
       hasQuote: !!st.quote,
       quoteText: st.quote.length > 300 ? st.quote.slice(0, 300) + '…' : st.quote,
       clearQuote: () => this.setState({ quote: '' }),
-      selBarOn: !!st.selBar,
+      // the floating Copy|Ask AI bar is gone — Ask AI lives at the top of the
+      // right-click menu instead (it used to land in the window corner)
+      selBarOn: false,
       selBarX: st.selBar ? st.selBar.x + 'px' : '0px',
       selBarY: st.selBar ? st.selBar.y + 'px' : '0px',
       selBarCopy: () => { try { navigator.clipboard.writeText(st.selBar.text); } catch (e) {} this.setState({ selBar: null }); },
