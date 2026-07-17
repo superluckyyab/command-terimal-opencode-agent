@@ -325,7 +325,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         </sc-if>
       </div>
 
-      <!-- quick command favorites (快捷命令收藏) -->
+      <!-- quick command favorites -->
       <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-top:1px solid var(--color-divider);flex:none;overflow-x:auto">
         <span style="flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600);padding-right:2px">Quick</span>
         <sc-for list="{{ quickCmds }}" as="q" hint-placeholder-count="4">
@@ -335,7 +335,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           </span>
         </sc-for>
         <span onClick="{{ addQuick }}" title="Save current command line as a favorite" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border:1px dashed var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600);font-size:14px" style-hover="background:var(--color-neutral-200);border-color:var(--color-accent-400)">+</span>
-        <span onClick="{{ openQuickMgr }}" title="管理快捷命令（分组 / 批量编辑）" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
+        <span onClick="{{ openQuickMgr }}" title="Manage quick commands (groups / bulk edit)" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2.2"></circle><path d="M8 1.8v2M8 12.2v2M1.8 8h2M12.2 8h2M3.6 3.6l1.4 1.4M11 11l1.4 1.4M12.4 3.6L11 5M5 11l-1.4 1.4"></path></svg>
         </span>
       </div>
@@ -428,10 +428,10 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         <span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
         <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ attachedName }}</span>
         <span style="margin-left:auto;display:flex;gap:3px;align-items:center">
-          <span onClick="{{ clearChat }}" title="新建会话 — 清除当前终端的 AI 对话" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
+          <span onClick="{{ clearChat }}" title="New chat — clear this terminal's AI conversation" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11v7.5h-6l-3 2.5v-2.5h-2z"></path><path d="M8 5.5v3M6.5 7h3"></path></svg>
           </span>
-          <span onClick="{{ toggleTimers }}" title="Schedulers (定时器)" style="position:relative;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ timersIconC }}" style-hover="background:var(--color-neutral-200)">
+          <span onClick="{{ toggleTimers }}" title="Schedulers" style="position:relative;display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ timersIconC }}" style-hover="background:var(--color-neutral-200)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 5v3l2 1.5"></path></svg>
             <sc-if value="{{ timersBadgeOn }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:0px;right:0px;min-width:12px;height:12px;border-radius:6px;background:var(--color-accent-2);color:#fff;font-size:8px;display:grid;place-items:center;padding:0 2px">{{ timersBadge }}</span></sc-if>
           </span>
@@ -699,7 +699,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         <sc-if value="{{ timerFormOn }}" hint-placeholder-val="{{ false }}">
           <div style="padding:14px 18px;border-bottom:1px solid var(--color-divider);display:flex;flex-direction:column;gap:10px;background:var(--color-surface)">
             <div style="display:grid;grid-template-columns:180px 1fr;gap:var(--space-2)">
-              <div class="field" style="margin:0"><label>Alias</label><input class="input" type="text" placeholder="e.g. 磁盘巡检" value="{{ tfAlias }}" onChange="{{ onTfAlias }}"></div>
+              <div class="field" style="margin:0"><label>Alias</label><input class="input" type="text" placeholder="e.g. disk check" value="{{ tfAlias }}" onChange="{{ onTfAlias }}"></div>
               <div class="field" style="margin:0"><label>Message to Operator</label><input class="input" type="text" placeholder="check disk usage on web-01" value="{{ tfMsg }}" onChange="{{ onTfMsg }}"></div>
             </div>
             <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
@@ -839,7 +839,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           <div style="display:flex;flex-direction:column;border-right:1px solid var(--color-divider);background:var(--color-surface)">
             <div style="flex:1;overflow-y:auto;padding:4px 0">
               <sc-if value="{{ qmEmpty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">该分组暂无命令。<br>点击下方 “+” 添加。</div>
+                <div style="padding:16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">No commands in this group.<br>Use “+” below to add one.</div>
               </sc-if>
               <sc-for list="{{ qmList }}" as="qi" hint-placeholder-count="6">
                 <div onClick="{{ qi.pick }}" style="padding:7px 14px;font-size:13px;font-family:ui-monospace,Menlo,monospace;font-weight:{{ qi.w }};cursor:pointer;background:{{ qi.bg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:var(--color-neutral-200)">{{ qi.label }}</div>
@@ -866,11 +866,11 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
               </div>
               <div style="display:grid;grid-template-columns:64px 1fr;gap:10px;align-items:start;flex:1;min-height:0">
                 <label style="text-align:right;font-size:13px;color:var(--color-neutral-700);padding-top:7px">Text:</label>
-                <textarea class="input" value="{{ qmText }}" onChange="{{ onQmText }}" placeholder="要发送到终端的命令，可多行" style="height:100%;min-height:260px;resize:none;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5"></textarea>
+                <textarea class="input" value="{{ qmText }}" onChange="{{ onQmText }}" placeholder="Command to send to the terminal (multiple lines allowed)" style="height:100%;min-height:260px;resize:none;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5"></textarea>
               </div>
             </sc-if>
             <sc-if value="{{ qmEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px">选择或新建一条命令进行编辑。</div>
+              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px">Select or create a command to edit.</div>
             </sc-if>
           </div>
         </div>
@@ -917,7 +917,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
     <div class="dialog-backdrop" style="z-index:82" onClick="{{ closeRename }}">
       <div class="dialog" style="width:400px" onClick="{{ stop }}">
         <div class="dialog-title">Set alias</div>
-        <div class="field"><label>Alias (leave empty to clear)</label><input class="input" type="text" value="{{ renameValue }}" onChange="{{ onRename }}" placeholder="e.g. 线上主库 / edge-gw"></div>
+        <div class="field"><label>Alias (leave empty to clear)</label><input class="input" type="text" value="{{ renameValue }}" onChange="{{ onRename }}" placeholder="e.g. prod-db / edge-gw"></div>
         <div class="dialog-actions">
           <button class="btn btn-secondary" onClick="{{ closeRename }}">Cancel</button>
           <button class="btn btn-primary" onClick="{{ saveRename }}">Save</button>
@@ -1133,7 +1133,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           <div style="display:flex;flex-direction:column;border-right:1px solid var(--color-divider);background:var(--color-surface)">
             <div style="flex:1;overflow-y:auto;padding:5px 0">
               <sc-if value="{{ okEmpty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:18px 16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">出厂无任何 OneKey。<br>点击左下角 “+” 添加一条凭据。</div>
+                <div style="padding:18px 16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">No OneKeys yet.<br>Use “+” at the bottom left to add a credential.</div>
               </sc-if>
               <sc-for list="{{ okList }}" as="k" hint-placeholder-count="5">
                 <div onClick="{{ k.pick }}" style="display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;background:{{ k.bg }};border-left:2px solid {{ k.br }}" style-hover="background:var(--color-neutral-200)">
@@ -1152,7 +1152,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           <!-- right: credential form -->
           <div style="padding:16px 22px;display:flex;flex-direction:column;gap:13px;overflow-y:auto">
             <sc-if value="{{ okEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px;text-align:center;line-height:1.8">还没有 OneKey。<br>用左侧 “+” 新建后，在这里填写用户名 / 密码 / 密钥。</div>
+              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px;text-align:center;line-height:1.8">No OneKeys yet.<br>Create one with “+” on the left, then fill in username / password / key here.</div>
             </sc-if>
             <sc-if value="{{ okHasSel }}" hint-placeholder-val="{{ true }}">
               <div class="field" style="margin:0"><label>Username:</label>
@@ -1160,7 +1160,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
               </div>
               <div class="field" style="margin:0">
                 <label style="display:flex;align-items:center">Password:
-                  <span onClick="{{ okTogglePw }}" title="连接时自动发送该密码" style="margin-left:auto;width:34px;height:18px;border-radius:10px;background:{{ okPwBg }};position:relative;cursor:pointer;flex:none"><span style="position:absolute;top:2px;left:{{ okPwKnob }};width:14px;height:14px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
+                  <span onClick="{{ okTogglePw }}" title="Send this password automatically on connect" style="margin-left:auto;width:34px;height:18px;border-radius:10px;background:{{ okPwBg }};position:relative;cursor:pointer;flex:none"><span style="position:absolute;top:2px;left:{{ okPwKnob }};width:14px;height:14px;border-radius:50%;background:#fff;transition:left .12s"></span></span>
                 </label>
                 <div style="position:relative">
                   <input class="input" type="{{ okPwType }}" value="{{ okPass }}" onChange="{{ onOkPass }}" style="width:100%;box-sizing:border-box;padding-right:34px;font-family:ui-monospace,Menlo,monospace;font-size:13px">
@@ -1195,7 +1195,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
                     <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600)">Response</div>
                   </div>
                   <sc-if value="{{ okKbiEmpty }}" hint-placeholder-val="{{ true }}">
-                    <div style="padding:12px;font-size:12px;color:var(--color-neutral-500)">（空 — 打开上方 Password 开关后自动应答密码提示，或点 Modify 添加自定义应答）</div>
+                    <div style="padding:12px;font-size:12px;color:var(--color-neutral-500)">(Empty — turn on Password above to auto-answer the password prompt, or use Modify to add a custom response)</div>
                   </sc-if>
                   <sc-for list="{{ okKbiRows }}" as="kb" hint-placeholder-count="2">
                     <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--color-divider)">
@@ -1217,7 +1217,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         </sc-if>
         <!-- bottom bar -->
         <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--color-divider)">
-          <span style="font-size:12.5px;color:var(--color-accent-2-700);display:flex;align-items:center;gap:7px">🔒 凭据只保存在本机 — 连接时自动应答服务器的密码提示。</span>
+          <span style="font-size:12.5px;color:var(--color-accent-2-700);display:flex;align-items:center;gap:7px">🔒 Credentials are stored on this machine only — used to auto-answer the server's password prompt.</span>
           <div style="display:flex;gap:8px;margin-left:auto">
             <button class="btn btn-secondary" style="min-width:96px" onClick="{{ closeOneKey }}">Cancel</button>
             <button class="btn btn-primary" style="min-width:96px" onClick="{{ saveOneKey }}">Ok</button>
@@ -1303,13 +1303,7 @@ class Component extends DCLogic {
       renameDlg: { open: false, id: null, value: '' },
       quickCtx: { open: false, x: 0, y: 0, id: null },
       quickEdit: { open: false, id: null, label: '', cmd: '' },
-      quickCmds: [
-        { id: 'q1', label: 'Service status', cmd: 'systemctl status nginx', group: 'Quick' },
-        { id: 'q2', label: 'Tail error log', cmd: 'tail -n 40 /var/log/nginx/error.log', group: 'Quick' },
-        { id: 'q3', label: 'Disk usage', cmd: 'df -h', group: 'Quick' },
-        { id: 'q4', label: 'Top by memory', cmd: 'ps aux --sort=-%mem | head', group: 'Quick' },
-        { id: 'q5', label: 'Who is on', cmd: 'w', group: 'Quick' }
-      ],
+      quickCmds: [], // ships empty — the user adds their own
       quickGroups: ['Quick'],
       quickMgr: { open: false, group: 'Quick', sel: 0 },
       oneKeys: [],
@@ -1378,11 +1372,11 @@ class Component extends DCLogic {
       if (s) this.setState({ apiBase: s.apiBase || '', apiKey: s.apiKey || '', model: s.model || this.state.model });
     } catch (e) {}
     try {
-      const ok = JSON.parse(localStorage.getItem('wireline-onekeys-v1') || 'null');
+      const ok = JSON.parse(localStorage.getItem('wireline-onekeys-v2') || 'null');
       if (Array.isArray(ok)) this.setState({ oneKeys: ok, activeKey: ok[0] ? ok[0].id : null });
     } catch (e) {}
     try {
-      const qc = JSON.parse(localStorage.getItem('wireline-quickcmds-v1') || 'null');
+      const qc = JSON.parse(localStorage.getItem('wireline-quickcmds-v2') || 'null');
       if (qc && Array.isArray(qc.cmds)) this.setState({
         quickCmds: qc.cmds,
         quickGroups: (Array.isArray(qc.groups) && qc.groups.length) ? qc.groups : ['Quick']
@@ -1542,7 +1536,7 @@ class Component extends DCLogic {
     term.onResize(({ cols, rows }) => { if (this.xtermId) invoke('pty_resize', { id: this.xtermId, cols, rows }).catch(() => {}); });
     if (listen) {
       listen('pty://data', ev => { const p = ev.payload; if (p && p.id === this.xtermId) this.onPtyData(p.data); }).then(un => { this.xtermUnData = un; });
-      listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === this.xtermId) { this._ptyDead = true; term.write('\r\n\x1b[33m[连接已断开 — 按 Enter 重新连接]\x1b[0m\r\n'); } }).then(un => { this.xtermUnExit = un; });
+      listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === this.xtermId) { this._ptyDead = true; term.write('\r\n\x1b[33m[Disconnected — press Enter to reconnect]\x1b[0m\r\n'); } }).then(un => { this.xtermUnExit = un; });
       // OS file drop → upload the file(s) to the remote via zmodem (rz)
       listen('tauri://file-drop', async ev => {
         const paths = ev.payload; if (!Array.isArray(paths) || !paths.length || !this.xtermId) return;
@@ -1571,7 +1565,23 @@ class Component extends DCLogic {
   onPtyData(bytes) {
     if (!this.xterm) return;
     if (this.zsentry) {
-      try { this.zsentry.consume(new Uint8Array(bytes)); return; } catch (e) {}
+      try { this.zsentry.consume(new Uint8Array(bytes)); return; }
+      catch (e) {
+        // a broken zmodem stream must not silently turn into raw noise
+        if (!this._zerrOnce) { this._zerrOnce = true; try { this.xterm.write('\r\n\x1b[31m[zmodem stream error: ' + (e && (e.message || e)) + ']\x1b[0m\r\n'); } catch (er) {} }
+      }
+    } else if (!this._zwarned) {
+      // No sentry (library failed to load) — say so when a transfer starts,
+      // rather than printing the raw handshake and hanging forever.
+      const u8 = new Uint8Array(bytes);
+      for (let i = 0; i + 3 < u8.length; i++) {
+        if (u8[i] === 42 && u8[i + 1] === 42 && u8[i + 2] === 24 && u8[i + 3] === 66) { // "**\x18B"
+          this._zwarned = true;
+          this.termWriteOut(bytes);
+          try { this.xterm.write('\r\n\x1b[31m[zmodem support not loaded - rz/sz unavailable]\x1b[0m\r\n'); } catch (er) {}
+          return;
+        }
+      }
     }
     this.termWriteOut(bytes);
   }
@@ -1616,9 +1626,17 @@ class Component extends DCLogic {
   onZmodem(detection) {
     const term = this.xterm;
     const T = window.__TAURI__;
-    let zsession;
-    try { zsession = detection.confirm(); } catch (e) { return; }
     const note = (s) => { try { term.write('\r\n\x1b[36m' + s + '\x1b[0m\r\n'); } catch (e) {} };
+    let zsession;
+    // Report failures instead of returning quietly — a silent bail here is what
+    // leaves the terminal sitting at "waiting to receive" with no explanation.
+    try { zsession = detection.confirm(); }
+    catch (e) { note('zmodem: could not start transfer: ' + (e && (e.message || e))); return; }
+    if (!T || !T.dialog || !T.invoke) {
+      note('zmodem: file dialogs unavailable (desktop app only). Transfer aborted.');
+      try { zsession.close(); } catch (e) {}
+      return;
+    }
 
     if (zsession.type === 'receive') {
       // sz on the remote → ask where to save, then write the bytes ourselves
@@ -1632,10 +1650,10 @@ class Component extends DCLogic {
           let at = 0; chunks.forEach(c => { all.set(c, at); at += c.length; });
           try {
             const path = await T.dialog.save({ defaultPath: det.name });
-            if (!path) { note('已取消保存 ' + det.name); return; }
+            if (!path) { note('Save cancelled: ' + det.name); return; }
             await T.invoke('write_file', { path, data: Array.from(all) });
-            note('已保存 ' + det.name + ' → ' + path);
-          } catch (e) { note('保存失败:' + (e.message || e)); }
+            note('Saved ' + det.name + ' -> ' + path);
+          } catch (e) { note('Save failed: ' + (e.message || e)); }
         }).catch(() => {});
       });
       zsession.on('session_end', () => { try { term.write('\r\n'); } catch (e) {} });
@@ -1646,8 +1664,8 @@ class Component extends DCLogic {
     // rz on the remote → send drag-dropped files, else ask the user to pick
     const send = (files) => {
       window.Zmodem.Browser.send_files(zsession, files, { on_progress: () => {} })
-        .then(() => { try { zsession.close(); } catch (e) {} note('上传完成'); })
-        .catch((e) => { try { zsession.close(); } catch (er) {} note('上传失败:' + (e && (e.message || e))); });
+        .then(() => { try { zsession.close(); } catch (e) {} note('Upload complete'); })
+        .catch((e) => { try { zsession.close(); } catch (er) {} note('Upload failed: ' + (e && (e.message || e))); });
     };
     if (this._pendingUploads && this._pendingUploads.length) {
       const files = this._pendingUploads; this._pendingUploads = null;
@@ -1658,7 +1676,7 @@ class Component extends DCLogic {
       try {
         const picked = await T.dialog.open({ multiple: true });
         const paths = !picked ? [] : (Array.isArray(picked) ? picked : [picked]);
-        if (!paths.length) { try { zsession.close(); } catch (e) {} note('已取消上传'); return; }
+        if (!paths.length) { try { zsession.close(); } catch (e) {} note('Upload cancelled'); return; }
         const files = [];
         for (const p of paths) {
           const bytes = await T.invoke('read_file', { path: p });
@@ -1667,7 +1685,7 @@ class Component extends DCLogic {
         send(files);
       } catch (e) {
         try { zsession.close(); } catch (er) {}
-        note('上传失败:' + (e && (e.message || e)));
+        note('Upload failed: ' + (e && (e.message || e)));
       }
     })();
   }
@@ -1891,7 +1909,7 @@ class Component extends DCLogic {
     const qj = JSON.stringify({ g: this.state.quickGroups, c: this.state.quickCmds });
     if (qj !== this._lastQuickJson) {
       this._lastQuickJson = qj;
-      try { localStorage.setItem('wireline-quickcmds-v1', JSON.stringify({ groups: this.state.quickGroups, cmds: this.state.quickCmds })); } catch (e) {}
+      try { localStorage.setItem('wireline-quickcmds-v2', JSON.stringify({ groups: this.state.quickGroups, cmds: this.state.quickCmds })); } catch (e) {}
     }
     const t = this.termRef.current;
     if (t) {
@@ -2504,7 +2522,7 @@ class Component extends DCLogic {
   // the IDE-style, multi-step opencode behaviour, executing on the connected
   // session (not the local machine).
   async askOpencode(sessId, sessName, goal) {
-    if (!window.__TAURI__) { this.setThinking(sessId, false); this.opSay('opencode 需要在桌面应用中运行(浏览器预览下不可用)。', true, '', sessId); return; }
+    if (!window.__TAURI__) { this.setThinking(sessId, false); this.opSay('opencode only runs in the desktop app (not in the browser preview).', true, '', sessId); return; }
     if (!goal) { const u = this.chatOf(sessId).slice().reverse().find(m => m.kind === 'user'); goal = u ? u.text : ''; }
     this._opStop = false;
     this._opSess = this.chatKey(sessId);
@@ -2516,7 +2534,7 @@ class Component extends DCLogic {
       // pause instead of typing commands into the wrong session
       if (this.state.activeTab !== sessId) {
         this.setThinking(sessId, false);
-        this.opSay('⏸ 终端已切换，自动执行已暂停。回到该终端后发送“继续”即可恢复。', false, '', sessId);
+        this.opSay('\u23f8 Terminal switched — autorun paused. Come back to this terminal and send "continue" to resume.', false, '', sessId);
         return;
       }
       const scroll = this.terminalText();
@@ -2531,7 +2549,7 @@ class Component extends DCLogic {
         '- When the goal is already satisfied by the output above, reply with a one-line summary starting with "DONE: " and NO code block.';
       let reply;
       try { reply = await this.opencodeOnce(prompt); }
-      catch (e) { this.setThinking(sessId, false); this.opSay('调用 opencode 失败:' + (e.message || e) + '\n请确认已安装并登录 opencode。', true, '', sessId); return; }
+      catch (e) { this.setThinking(sessId, false); this.opSay('Calling opencode failed: ' + (e.message || e) + '\nMake sure opencode is installed and logged in.', true, '', sessId); return; }
       if (this._opStop) { this.setThinking(sessId, false); return; }
       reply = String(reply || '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').replace(/\x1b\][^\x07]*\x07/g, '').trim();
       const mm = reply.match(/```(?:[\w-]*\n)?([\s\S]*?)```/);
@@ -2544,7 +2562,7 @@ class Component extends DCLogic {
           .replace(/^[ \t]*>[ \t]*build[ \t]*·[^\n]*/gim, '')
           .replace(/^[\s\S]*?DONE[:：]?/i, '')
           .trim();
-        this.opSay(summary || reply || '(已完成)', false, '', sessId);
+        this.opSay(summary || reply || '(done)', false, '', sessId);
         return;
       }
       // show opencode's reasoning ("thinking"), then the command it runs
@@ -2558,7 +2576,7 @@ class Component extends DCLogic {
       await this.runInTerminalAndWait(cmd);
     }
     this.setThinking(sessId, false);
-    this.opSay('已自动执行 ' + maxSteps + ' 步后暂停。你可以继续追问,或说“继续”。', false, '', sessId);
+    this.opSay('Paused after ' + maxSteps + ' automatic steps. Ask again, or say "continue".', false, '', sessId);
   }
 
   opencodeOnce(prompt) {
@@ -2572,7 +2590,7 @@ class Component extends DCLogic {
     this.writeToPty('\x03');
     const sessId = this.state.activeTab;
     this.setThinking(sessId, false);
-    this.opSay('⏹ 已停止。', true, '', sessId);
+    this.opSay('\u23f9 Stopped.', true, '', sessId);
   }
 
   // Write a command to the SSH PTY and resolve once it has finished. Completion
@@ -2731,7 +2749,7 @@ class Component extends DCLogic {
       case 'new':
         this.clearAiChat(); return true;
       case 'help':
-        this.opSay('Commands:\n  /models · /model <name>\n  /mcp · /mcp pin <name> · @<mcp> …\n  /skills · /workflows\n  /schedule <time> <message>\n  /clear — 清除当前终端的 AI 会话，重新开始', true); return true;
+        this.opSay('Commands:\n  /models · /model <name>\n  /mcp · /mcp pin <name> · @<mcp> …\n  /skills · /workflows\n  /schedule <time> <message>\n  /clear - clear this terminal\u2019s AI conversation', true); return true;
       default:
         return false;
     }
@@ -2851,7 +2869,7 @@ class Component extends DCLogic {
   }
 
   persistOneKeys(list) {
-    try { localStorage.setItem('wireline-onekeys-v1', JSON.stringify(list || this.state.oneKeys)); } catch (e) {}
+    try { localStorage.setItem('wireline-onekeys-v2', JSON.stringify(list || this.state.oneKeys)); } catch (e) {}
   }
 
   // Set the identity-file path for one of the Public Key rows (Linux/macOS/Windows).
@@ -2869,9 +2887,9 @@ class Component extends DCLogic {
   okAddKbi() {
     const key = this.state.oneKeys.find(k => k.id === this.state.activeKey); if (!key) return;
     let c = null, r = null;
-    try { c = window.prompt('Challenge（服务器提示文本，如 "verification code:"）:', ''); } catch (e) {}
+    try { c = window.prompt('Challenge (server prompt text, e.g. "verification code:"):', ''); } catch (e) {}
     if (c == null || !c.trim()) return;
-    try { r = window.prompt('Response（自动应答内容）:', ''); } catch (e) {}
+    try { r = window.prompt('Response (text to send automatically):', ''); } catch (e) {}
     if (r == null) return;
     this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { kbi: (k.kbi || []).concat({ challenge: c.trim(), response: r }) }) : k) }));
   }
@@ -2988,7 +3006,7 @@ class Component extends DCLogic {
         DIV,
         m((this.state.tsMargin ? 'Hide' : 'Show') + ' Timestamp Margin', () => this.setState(s => ({ tsMargin: !s.tsMargin }))),
         m('Command Palette…', () => this.setState({ paletteOpen: true, paletteQuery: '', paletteSel: 0 }), 'Ctrl+Shift+P'),
-        m('Dark Mode (深夜模式)', () => this.setState(s => ({ dark: !s.dark })), 'Ctrl+Shift+D', { check: this.state.dark }),
+        m('Dark Mode', () => this.setState(s => ({ dark: !s.dark })), 'Ctrl+Shift+D', { check: this.state.dark }),
         m('Focus Mode', null, 'F11')
       ]},
       { label: 'Mode', build: (m) => [
@@ -3260,7 +3278,7 @@ class Component extends DCLogic {
 
     // ── login dialog (on SSH connect) ──
 
-    // ── quick commands (快捷命令收藏) ──
+    // ── quick commands ──
     const quickCmds = st.quickCmds.map(q => ({
       label: q.label, cmd: q.cmd,
       run: () => this.runQuick(q.cmd),
@@ -3286,7 +3304,7 @@ class Component extends DCLogic {
       okTogglePw: () => this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { pwOn: !k.pwOn }) : k) })),
       okTabSSH: st.oneKeyTab === 'SSH',
       okTabOther: st.oneKeyTab !== 'SSH',
-      okTabHint: st.oneKeyTab === 'Account' ? 'Account 档案 — 即将支持。凭据请在 SSH 页管理。' : '按会话绑定 OneKey — 即将支持。',
+      okTabHint: st.oneKeyTab === 'Account' ? 'Account profiles - coming soon. Manage credentials on the SSH tab.' : 'Per-session OneKey binding - coming soon.',
       okEmpty: st.oneKeys.length === 0,
       okHasSel: st.oneKeys.length > 0,
       okKeys, okKbiRows,
@@ -3295,7 +3313,7 @@ class Component extends DCLogic {
       okKbiAdd: () => this.okAddKbi(),
       okRename: () => {
         const k = st.oneKeys.find(x => x.id === st.activeKey); if (!k) return;
-        let v = null; try { v = window.prompt('OneKey 名称:', k.name); } catch (e) {}
+        let v = null; try { v = window.prompt('OneKey name:', k.name); } catch (e) {}
         if (v == null || !v.trim()) return;
         const name = this.uniqueKeyName(v, st.activeKey); // never collide
         this.setState(s => ({ oneKeys: s.oneKeys.map(x => x.id === s.activeKey ? Object.assign({}, x, { name }) : x) }), () => this.persistOneKeys());
@@ -3375,7 +3393,7 @@ class Component extends DCLogic {
       qmGroups: st.quickGroups.map(g => ({ v: g, label: g })),
       onQmGroup: (e) => { const v = e.target.value; this.setState(s => ({ quickMgr: Object.assign({}, s.quickMgr, { group: v, sel: 0 }) })); },
       qmAddGroup: () => {
-        let v = null; try { v = window.prompt('新分组名称:', ''); } catch (e) {}
+        let v = null; try { v = window.prompt('New group name:', ''); } catch (e) {}
         if (v == null || !v.trim()) return; v = v.trim();
         this.setState(s => ({
           quickGroups: s.quickGroups.includes(v) ? s.quickGroups : s.quickGroups.concat(v),
@@ -3397,7 +3415,7 @@ class Component extends DCLogic {
       qmRemoveGroupC: st.quickGroups.length > 1 ? 'var(--color-neutral-600)' : 'var(--color-neutral-400)',
       qmRenameGroup: () => {
         const g = st.quickMgr.group;
-        let v = null; try { v = window.prompt('分组名称:', g); } catch (e) {}
+        let v = null; try { v = window.prompt('Group name:', g); } catch (e) {}
         if (v == null || !v.trim() || v.trim() === g) return; v = v.trim();
         this.setState(s => ({
           quickGroups: s.quickGroups.map(x => x === g ? v : x),
@@ -3617,11 +3635,11 @@ class Component extends DCLogic {
       })),
       // menus
       menus, menuOpenAny: st.openMenu !== null, closeMenus,
-      // theme (dark / 深夜模式)
+      // theme (dark)
       themeVars: st.dark ? '--color-bg:#1b1a19;--color-surface:#262322;--color-text:#e9e6e4;--color-divider:rgba(255,255,255,.12);--color-neutral-100:#232120;--color-neutral-200:#2d2b29;--color-neutral-300:#3a3836;--color-neutral-400:#6f6b69;--color-neutral-500:#8f8b89;--color-neutral-600:#a8a4a2;--color-neutral-700:#c6c2c0;--color-neutral-800:#dedad8;--color-accent-100:rgba(0,136,176,.22);--color-accent-2-100:rgba(214,0,108,.22)' : '',
       toggleDark: () => this.setState(s => ({ dark: !s.dark })),
       darkIcon: st.dark ? '☼' : '☾',
-      darkTip: st.dark ? 'Switch to light' : 'Dark mode (深夜模式)',
+      darkTip: st.dark ? 'Switch to light' : 'Dark mode',
       // session context menu (pin / delete)
       ctxOpen: st.ctx.open,
       ctxX: st.ctx.x + 'px', ctxY: st.ctx.y + 'px',
@@ -3817,13 +3835,13 @@ class Component extends DCLogic {
       },
       slashOn: st.draft.startsWith('/') && !st.draft.includes(' ') && st.draft.length > 0,
       slashItems: [
-        { cmd: '/models', desc: '列出/切换模型' },
-        { cmd: '/model', desc: '/model <name> 直接切换' },
-        { cmd: '/mcp', desc: '列出 MCP · /mcp pin <name> 置顶 · @name 调用' },
-        { cmd: '/skills', desc: '查看已安装 skills' },
-        { cmd: '/workflows', desc: '查看工作流' },
-        { cmd: '/schedule', desc: '/schedule 30s|5min|14:30 <消息>' },
-        { cmd: '/clear', desc: '清除当前终端的 AI 会话，重新开始' }
+        { cmd: '/models', desc: 'List / switch model' },
+        { cmd: '/model', desc: '/model <name> to switch' },
+        { cmd: '/mcp', desc: 'List MCP servers · /mcp pin <name> · @name to call' },
+        { cmd: '/skills', desc: 'Show installed skills' },
+        { cmd: '/workflows', desc: 'Show workflows' },
+        { cmd: '/schedule', desc: '/schedule 30s|5min|14:30 <message>' },
+        { cmd: '/clear', desc: 'Clear this terminal\u2019s AI conversation' }
       ].filter(x => x.cmd.startsWith(st.draft.trim()) || st.draft.trim() === '/').map(x => ({ cmd: x.cmd, desc: x.desc, pick: () => this.setState({ draft: x.cmd + ' ' }) })),
       // timers manager + skills/mcp panels
       toggleTimers: () => this.setState(s => ({ timersOpen: !s.timersOpen, timerForm: null, timerQuery: '' })),
@@ -3878,11 +3896,11 @@ class Component extends DCLogic {
           alias: t.alias, msg: t.msg,
           specLabel: (t.periodic ? 'every ' : 'once ') + t.spec,
           runsLabel: t.periodic ? (t.runsDone + '/' + (t.count === 0 ? '∞' : t.count)) : (t.runsDone > 0 ? 'ran' : '—'),
-          statusWord: t.status === 'active' ? 'active' : t.status === 'paused' ? 'paused' : 'done · 待重新开启',
+          statusWord: t.status === 'active' ? 'active' : t.status === 'paused' ? 'paused' : 'done',
           tagClass: 'tag ' + (t.status === 'active' ? 'tag-accent' : t.status === 'paused' ? 'tag-neutral' : 'tag-outline'),
           dot: t.status === 'active' ? 'var(--color-accent)' : t.status === 'paused' ? 'var(--color-neutral-400)' : 'var(--color-accent-2)',
           runGlyph: t.status === 'active' ? '❘❘' : t.status === 'paused' ? '▶' : '↻',
-          runTip: t.status === 'active' ? 'Pause' : t.status === 'paused' ? 'Resume' : 'Restart (重新开启)',
+          runTip: t.status === 'active' ? 'Pause' : t.status === 'paused' ? 'Resume' : 'Restart',
           runC: t.status === 'active' ? 'var(--color-neutral-600)' : 'var(--color-accent-700)',
           toggleRun: () => t.status === 'active' ? this.pauseTimer(t.id) : t.status === 'paused' ? this.resumeTimer(t.id) : this.restartTimer(t.id),
           edit: () => this.setState({ timerForm: { id: t.id, alias: t.alias, msg: t.msg, spec: t.spec, periodic: t.periodic, count: t.count === 0 ? '' : String(t.count) } }),
@@ -3892,7 +3910,7 @@ class Component extends DCLogic {
       mcpRows: st.mcps.map(m => ({
         name: m.name, desc: m.desc,
         starC: m.pinned ? 'var(--color-accent-2)' : 'var(--color-neutral-300)',
-        pinTip: m.pinned ? 'Unpin' : 'Pin (置顶)',
+        pinTip: m.pinned ? 'Unpin' : 'Pin',
         togglePin: () => this.setState(s => ({ mcps: s.mcps.map(x => x.name === m.name ? Object.assign({}, x, { pinned: !x.pinned }) : x) })),
         use: () => this.setState({ mcpOpen: false, draft: '@' + m.name + ' ' })
       })),
@@ -3903,7 +3921,7 @@ class Component extends DCLogic {
         const v = e.target.value;
         if (v === '__add__') {
           let name = '';
-          try { name = window.prompt('新模型名称 (e.g. glm-4-plus):', '') || ''; } catch (er) {}
+          try { name = window.prompt('New model name (e.g. glm-4-plus):', '') || ''; } catch (er) {}
           name = name.trim();
           if (name) this.setState(s => ({ models: s.models.includes(name) ? s.models : s.models.concat(name), model: name }));
           else this.forceUpdate();
