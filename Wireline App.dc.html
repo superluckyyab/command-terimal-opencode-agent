@@ -343,28 +343,31 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
       <!-- SENDER panel (timed data sending) — hidden until toggled -->
       <sc-if value="{{ senderOpen }}" hint-placeholder-val="{{ false }}">
       <div style="border-top:1px solid var(--color-divider);flex:none;display:flex;flex-direction:column">
-        <div style="display:flex;align-items:center;gap:14px;padding:6px 12px;border-bottom:1px solid var(--color-divider)">
-          <span style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2-700)">Sender</span>
-          <span onClick="{{ senderToggleRun }}" title="{{ senderRunTip }}" style="display:grid;place-items:center;width:24px;height:24px;border-radius:var(--radius-md);cursor:pointer;color:{{ senderRunC }}" style-hover="background:var(--color-neutral-200)">
+        <div style="display:flex;align-items:center;gap:14px;padding:6px 12px;border-bottom:1px solid var(--color-divider);overflow:hidden;min-width:0">
+          <span style="flex:none;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-accent-2-700)">Sender</span>
+          <span onClick="{{ senderToggleRun }}" title="{{ senderRunTip }}" style="flex:none;display:grid;place-items:center;width:24px;height:24px;border-radius:var(--radius-md);cursor:pointer;color:{{ senderRunC }}" style-hover="background:var(--color-neutral-200)">
             <sc-if value="{{ senderRunning }}" hint-placeholder-val="{{ false }}"><svg width="11" height="11" viewBox="0 0 12 12"><rect x="1" y="1" width="10" height="10" fill="currentColor"></rect></svg></sc-if>
             <sc-if value="{{ senderStopped }}" hint-placeholder-val="{{ true }}"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 1l9 5-9 5z" fill="currentColor"></path></svg></sc-if>
           </span>
-          <label class="radio" style="font-size:12.5px"><input type="radio" name="snd-fmt" checked="{{ sndTextOn }}" onChange="{{ sndSetText }}"><span class="dot"></span>Text</label>
-          <label class="radio" style="font-size:12.5px"><input type="radio" name="snd-fmt" checked="{{ sndHexOn }}" onChange="{{ sndSetHex }}"><span class="dot"></span>Hex</label>
-          <span style="font-size:12px;color:var(--color-neutral-600)">By:</span>
-          <label class="radio" style="font-size:12.5px"><input type="radio" name="snd-by" checked="{{ sndLineOn }}" onChange="{{ sndSetLine }}"><span class="dot"></span>Line</label>
-          <label class="radio" style="font-size:12.5px"><input type="radio" name="snd-by" checked="{{ sndCharOn }}" onChange="{{ sndSetChar }}"><span class="dot"></span>Char</label>
-          <span style="font-size:12px;color:var(--color-neutral-600)">Count:</span>
-          <input class="input" type="text" value="{{ sndCount }}" onChange="{{ onSndCount }}" style="width:56px;height:24px;font-size:12px">
-          <span style="font-size:12px;color:var(--color-neutral-600)">Interval:</span>
-          <input class="input" type="text" value="{{ sndInterval }}" onChange="{{ onSndInterval }}" style="width:64px;height:24px;font-size:12px">
-          <span style="font-size:12px;color:var(--color-neutral-600)">Targets:</span>
-          <select class="input" value="{{ sndTarget }}" onChange="{{ onSndTarget }}" style="width:auto;height:24px;font-size:12px;padding:1px 8px">
-            <option value="current">Current Session</option>
-            <option value="all">All Sessions</option>
-          </select>
-          <span style="margin-left:auto;font-size:11px;color:{{ senderStatusC }};font-family:ui-monospace,Menlo,monospace">{{ senderStatus }}</span>
-          <span onClick="{{ toggleSender }}" title="Close sender" style="display:grid;place-items:center;width:22px;height:22px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-500)" style-hover="background:var(--color-neutral-200)">×</span>
+          <!-- middle controls clip when the panel is too narrow; Sender/▶ and ✕ stay put -->
+          <div style="display:flex;align-items:center;gap:14px;flex:1;min-width:0;overflow:hidden">
+            <label class="radio" style="flex:none;font-size:12.5px"><input type="radio" name="snd-fmt" checked="{{ sndTextOn }}" onChange="{{ sndSetText }}"><span class="dot"></span>Text</label>
+            <label class="radio" style="flex:none;font-size:12.5px"><input type="radio" name="snd-fmt" checked="{{ sndHexOn }}" onChange="{{ sndSetHex }}"><span class="dot"></span>Hex</label>
+            <span style="flex:none;font-size:12px;color:var(--color-neutral-600)">By:</span>
+            <label class="radio" style="flex:none;font-size:12.5px"><input type="radio" name="snd-by" checked="{{ sndLineOn }}" onChange="{{ sndSetLine }}"><span class="dot"></span>Line</label>
+            <label class="radio" style="flex:none;font-size:12.5px"><input type="radio" name="snd-by" checked="{{ sndCharOn }}" onChange="{{ sndSetChar }}"><span class="dot"></span>Char</label>
+            <span style="flex:none;font-size:12px;color:var(--color-neutral-600)">Count:</span>
+            <input class="input" type="text" value="{{ sndCount }}" onChange="{{ onSndCount }}" style="flex:none;width:56px;height:24px;font-size:12px">
+            <span style="flex:none;font-size:12px;color:var(--color-neutral-600)">Interval:</span>
+            <input class="input" type="text" value="{{ sndInterval }}" onChange="{{ onSndInterval }}" style="flex:none;width:64px;height:24px;font-size:12px">
+            <span style="flex:none;font-size:12px;color:var(--color-neutral-600)">Targets:</span>
+            <select class="input" value="{{ sndTarget }}" onChange="{{ onSndTarget }}" style="flex:none;width:auto;height:24px;font-size:12px;padding:1px 8px">
+              <option value="current">Current Session</option>
+              <option value="all">All Sessions</option>
+            </select>
+            <span style="flex:none;margin-left:auto;font-size:11px;color:{{ senderStatusC }};font-family:ui-monospace,Menlo,monospace;white-space:nowrap">{{ senderStatus }}</span>
+          </div>
+          <span onClick="{{ toggleSender }}" title="Close sender" style="flex:none;display:grid;place-items:center;width:22px;height:22px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-500)" style-hover="background:var(--color-neutral-200)">×</span>
         </div>
         <textarea class="input" rows="3" placeholder="{{ sndPh }}" value="{{ sndData }}" onChange="{{ onSndData }}" style="border:none;border-radius:0;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;resize:vertical"></textarea>
       </div>
@@ -372,9 +375,9 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
 
       <!-- FIND bar (bottom) — hidden until toggled -->
       <sc-if value="{{ searchOpen }}" hint-placeholder-val="{{ false }}">
-      <div style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-top:1px solid var(--color-divider);flex:none">
+      <div style="display:flex;align-items:center;gap:8px;padding:5px 12px;border-top:1px solid var(--color-divider);flex:none;overflow:hidden;min-width:0">
         <span style="font-size:12px;color:var(--color-neutral-600);flex:none">Find:</span>
-        <input class="input" type="text" placeholder="keyword…" value="{{ logQuery }}" onChange="{{ onLogQuery }}" onKeyDown="{{ onSearchKey }}" style="flex:1;height:26px;font-size:12px">
+        <input class="input" type="text" placeholder="keyword…" value="{{ logQuery }}" onChange="{{ onLogQuery }}" onKeyDown="{{ onSearchKey }}" style="flex:1;min-width:60px;height:26px;font-size:12px">
         <!-- find options -->
         <div style="display:flex;align-items:center;gap:2px;flex:none">
           <sc-for list="{{ findOpts }}" as="fo" hint-placeholder-count="4">
@@ -1461,7 +1464,9 @@ class Component extends DCLogic {
     const T = window.__TAURI__;
     const invoke = T.invoke;
     const listen = T.event && T.event.listen;
-    host.style.paddingLeft = '66px'; // reserve room for the timestamp gutter
+    // left reserves the timestamp gutter; the rest is breathing room so text
+    // doesn't run into the window edges
+    host.style.padding = '8px 14px 8px 66px';
     host.style.paddingRight = '14px'; // reserve room for the search match locator strip
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
