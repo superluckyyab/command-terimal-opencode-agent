@@ -149,7 +149,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
       <div style="display:flex;align-items:stretch;gap:2px;padding:0 10px;border-bottom:1px solid var(--color-divider);flex:none">
         <div style="display:flex;align-items:stretch;gap:2px;overflow-x:auto;flex:1;min-width:0">
         <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3">
-          <div draggable="{{ true }}" onDragStart="{{ tb.dragStart }}" onDragOver="{{ tb.dragOver }}" onDrop="{{ tb.drop }}" onClick="{{ tb.activate }}" onContextMenu="{{ tb.ctx }}" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:2px solid {{ tb.bc }};color:{{ tb.c }};font-weight:{{ tb.w }};white-space:nowrap;background:{{ tb.dragBg }}" style-hover="color:var(--color-accent-600)">
+          <div onMouseDown="{{ tb.down }}" onClick="{{ tb.activate }}" onContextMenu="{{ tb.ctx }}" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:2px solid {{ tb.bc }};color:{{ tb.c }};font-weight:{{ tb.w }};white-space:nowrap;background:{{ tb.dragBg }}" style-hover="color:var(--color-accent-600)">
             {{ tb.name }}
             <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500)">{{ tb.sub }}</span>
             <span onClick="{{ tb.close }}" style="color:var(--color-neutral-500);padding:0 2px;border-radius:2px" style-hover="color:var(--color-accent-2-700);background:var(--color-neutral-200)">×</span>
@@ -1461,7 +1461,7 @@ class Component extends DCLogic {
     const T = window.__TAURI__;
     const invoke = T.invoke;
     const listen = T.event && T.event.listen;
-    host.style.paddingLeft = '80px'; // reserve room for the timestamp/line-number gutter
+    host.style.paddingLeft = '66px'; // reserve room for the timestamp gutter
     host.style.paddingRight = '14px'; // reserve room for the search match locator strip
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
@@ -1480,7 +1480,7 @@ class Component extends DCLogic {
     try {
       this._lineTs = {}; this._totalLines = 0;
       this.xtermGutter = document.createElement('div');
-      this.xtermGutter.style.cssText = 'position:absolute;left:0;top:0;width:78px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
+      this.xtermGutter.style.cssText = 'position:absolute;left:0;top:0;width:64px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
       host.appendChild(this.xtermGutter);
       term.onLineFeed(() => {
         // Only count line feeds produced by real terminal output. Resizing the
@@ -1571,16 +1571,18 @@ class Component extends DCLogic {
       const pw = this._pendPass;
       setTimeout(() => this.writeToPty(pw + '\n'), 120);
     }
-    // Client-side quick color, but only on plain chunks: skip if the chunk already
-    // carries server SGR colors (don't fight ls --color / vim) or a split multibyte
-    // char (write raw bytes so xterm reassembles CJK correctly).
+    // Client-side quick color — ONLY on chunks that contain no escape sequence at
+    // all. Anything with an ESC is a program driving the screen (vim, less, any
+    // cursor positioning like \x1b[46;1H): injecting colour there splits the
+    // sequence and garbles the display. Also skip a split multibyte char, so
+    // xterm reassembles CJK from the raw bytes.
     const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
-    const hasSGR = /\x1b\[[0-9;]*m/.test(text);
+    const hasEsc = text.indexOf('\x1b') >= 0;
     // mark that line feeds seen during this write come from real output, so the
     // gutter counter ignores feeds caused by resizing (see onLineFeed)
     this._writing = (this._writing || 0) + 1;
     const done = () => { this._writing = Math.max(0, (this._writing || 1) - 1); };
-    if (this.state.ipColor && inNormal && text && !hasSGR && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text), done);
+    if (this.state.ipColor && inNormal && text && !hasEsc && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text), done);
     else term.write(u8, done);
   }
 
@@ -1726,11 +1728,13 @@ class Component extends DCLogic {
         if (line && line.isWrapped) continue; // continuation of the row above
         // stamped when the line was produced; never re-read the clock on repaint
         const ts = this._lineTs[g] || '';
+        if (!ts) continue;
         const k = kids[i];
         const top = offY + k.offsetTop, h = k.offsetHeight;
+        // timestamp only — the running line number was noise, and dropping it
+        // also removes any chance of a number drifting out of sync
         html += '<div style="position:absolute;top:' + top + 'px;right:5px;height:' + h + 'px;line-height:' + h + 'px;white-space:nowrap">'
-          + (ts ? '<span style="color:#5f5b59">[' + ts + ']</span> ' : '')
-          + '<span style="color:#3fb5d6;opacity:.75">' + g + '</span></div>';
+          + '<span style="color:#5f5b59">[' + ts + ']</span></div>';
       }
       gutter.innerHTML = html;
     } catch (e) {}
@@ -1882,7 +1886,14 @@ class Component extends DCLogic {
   sess(id) { return this.state.sessions.find(s => s.id === id); }
 
   // ─── per-terminal AI chat (each terminal keeps its own conversation) ───
-  chatKey(id) { return id || '__global__'; }
+  // Key the AI conversation to the connection target, not the (ephemeral)
+  // session id: a session that times out and is reconnected — even as a new
+  // tab — keeps its history. Different hosts still get different chats.
+  chatKey(id) {
+    const s = this.sess(id);
+    if (s && s.addr) return (s.type || 'ssh') + ':' + (s.user || '') + '@' + s.addr + ':' + (s.port || '');
+    return id || '__global__';
+  }
   chatOf(id) { return this.state.chats[this.chatKey(id)] || []; }
   addChat(id, msg) {
     const k = this.chatKey(id);
@@ -2039,6 +2050,40 @@ class Component extends DCLogic {
     if (!id || !cmd || !cmd.trim()) return;
     cmd = cmd.trim();
     this.setState(s => ({ cmdHistories: Object.assign({}, s.cmdHistories, { [id]: [cmd].concat((s.cmdHistories[id] || []).filter(x => x !== cmd)).slice(0, 50) }) }));
+  }
+
+  // Reorder terminal tabs by dragging. Uses mouse events rather than HTML5
+  // drag-and-drop: Tauri's OS file-drop handler swallows webview drag events on
+  // Windows, so dragstart/drop never fire. A press without movement still
+  // activates the tab (onClick), so this only kicks in on an actual drag.
+  startTabDrag(e, idx) {
+    if (e.button !== 0) return;
+    const strip = e.currentTarget && e.currentTarget.parentNode;
+    if (!strip) return;
+    const startX = e.clientX;
+    let moved = false;
+    const move = (ev) => { if (Math.abs(ev.clientX - startX) > 5) moved = true; };
+    const up = (ev) => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+      if (!moved) return;
+      let to = null;
+      const kids = strip.children;
+      for (let i = 0; i < kids.length; i++) {
+        const r = kids[i].getBoundingClientRect();
+        if (ev.clientX >= r.left && ev.clientX <= r.right) { to = i; break; }
+      }
+      if (to == null || to === idx) return;
+      this.setState(s => {
+        const arr = s.openTabs.slice();
+        if (idx >= arr.length || to >= arr.length) return {};
+        const [m] = arr.splice(idx, 1);
+        arr.splice(to, 0, m);
+        return { openTabs: arr };
+      });
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
   }
 
   startHistDrag(e) {
@@ -2302,8 +2347,10 @@ class Component extends DCLogic {
       const buffers = Object.assign({}, s.buffers); delete buffers[id];
       const cmdHistories = Object.assign({}, s.cmdHistories); delete cmdHistories[id];
       const pinnedIds = Object.assign({}, s.pinnedIds); delete pinnedIds[id];
-      const chats = Object.assign({}, s.chats); delete chats[id];
-      const thinkingBy = Object.assign({}, s.thinkingBy); delete thinkingBy[id];
+      // keep chats: they are keyed by host (chatKey), so closing a tab must not
+      // throw away the conversation — reconnecting to that host restores it
+      const chats = s.chats;
+      const thinkingBy = Object.assign({}, s.thinkingBy); delete thinkingBy[this.chatKey(id)];
       return {
         sessions: s.sessions.filter(x => x.id !== id),
         openTabs, buffers, pinnedIds, cmdHistories, chats, thinkingBy,
@@ -2994,19 +3041,7 @@ class Component extends DCLogic {
         activate: () => this.setState({ activeTab: id }),
         close: (e) => this.closeTab(id, e),
         ctx: (e) => { e.preventDefault(); this.setState({ tabCtx: { open: true, x: e.clientX, y: e.clientY, id } }); },
-        dragStart: (e) => { this.dragIdx = idx; e.dataTransfer.effectAllowed = 'move'; },
-        dragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
-        drop: (e) => {
-          e.preventDefault();
-          const from = this.dragIdx; this.dragIdx = null;
-          if (from == null || from === idx) return;
-          this.setState(s2 => {
-            const arr = s2.openTabs.slice();
-            const [moved] = arr.splice(from, 1);
-            arr.splice(idx, 0, moved);
-            return { openTabs: arr };
-          });
-        }
+        down: (e) => this.startTabDrag(e, idx)
       };
     }).filter(Boolean);
 
