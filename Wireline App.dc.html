@@ -1416,8 +1416,16 @@ class Component extends DCLogic {
     if (sess.type !== 'ssh') return null;
     const args = [];
     if (sess.port && String(sess.port) !== '22') args.push('-p', String(sess.port));
-    // accept-new: trust a host's key on first connect (still rejects a changed key)
-    args.push('-o', 'StrictHostKeyChecking=accept-new');
+    // Lab devices regenerate their host key on reflash/reboot, which makes ssh
+    // refuse to connect ("REMOTE HOST IDENTIFICATION HAS CHANGED"). WindTerm
+    // doesn't gate on this, so neither do we: don't track host keys at all.
+    // ponytail: trades MITM detection for always-connects; fine for lab gear,
+    // revisit if these sessions ever cross an untrusted network.
+    const devNull = /Windows/i.test(navigator.userAgent) ? 'NUL' : '/dev/null';
+    args.push('-o', 'StrictHostKeyChecking=no');
+    args.push('-o', 'UserKnownHostsFile=' + devNull);
+    args.push('-o', 'GlobalKnownHostsFile=' + devNull);
+    args.push('-o', 'LogLevel=ERROR'); // silences the "Permanently added…" notice
     args.push((sess.user ? sess.user + '@' : '') + sess.addr);
     return { program: 'ssh', args };
   }
@@ -1475,6 +1483,10 @@ class Component extends DCLogic {
       this.xtermGutter.style.cssText = 'position:absolute;left:0;top:0;width:78px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
       host.appendChild(this.xtermGutter);
       term.onLineFeed(() => {
+        // Only count line feeds produced by real terminal output. Resizing the
+        // terminal (e.g. opening the Sender/Find panel) also scrolls the buffer
+        // and would otherwise inflate the counter, shifting every line number.
+        if (!this._writing) return;
         this._totalLines++;
         const t = new Date().toTimeString().slice(0, 8);
         // stamp when a line STARTS: the LF completes line N and begins line N+1
@@ -1564,8 +1576,12 @@ class Component extends DCLogic {
     // char (write raw bytes so xterm reassembles CJK correctly).
     const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
     const hasSGR = /\x1b\[[0-9;]*m/.test(text);
-    if (this.state.ipColor && inNormal && text && !hasSGR && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text));
-    else term.write(u8);
+    // mark that line feeds seen during this write come from real output, so the
+    // gutter counter ignores feeds caused by resizing (see onLineFeed)
+    this._writing = (this._writing || 0) + 1;
+    const done = () => { this._writing = Math.max(0, (this._writing || 1) - 1); };
+    if (this.state.ipColor && inNormal && text && !hasSGR && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text), done);
+    else term.write(u8, done);
   }
 
   writeBytesToPty(octets) {
@@ -1701,7 +1717,6 @@ class Component extends DCLogic {
         }
       }
       let html = '';
-      const nowTs = new Date().toTimeString().slice(0, 8);
       for (let i = 0; i < kids.length; i++) {
         const a = viewportY + i;
         if (a > cursorAbs) break; // rows past the shell's current line are unwritten
@@ -1709,7 +1724,8 @@ class Component extends DCLogic {
         if (!g || g <= 0) continue;
         const line = buf.getLine(a);
         if (line && line.isWrapped) continue; // continuation of the row above
-        const ts = this._lineTs[g] || (g === total + 1 ? nowTs : '');
+        // stamped when the line was produced; never re-read the clock on repaint
+        const ts = this._lineTs[g] || '';
         const k = kids[i];
         const top = offY + k.offsetTop, h = k.offsetHeight;
         html += '<div style="position:absolute;top:' + top + 'px;right:5px;height:' + h + 'px;line-height:' + h + 'px;white-space:nowrap">'
@@ -1943,10 +1959,11 @@ class Component extends DCLogic {
       this.appendLines(id, [
         { agent: false, spans: [{ t: '[sender] ', c: 'var(--color-accent-2-400)' }, { t: (sd.by === 'char' ? payload.split('').join(' ') : payload), c: '#e8e5e3' }] }
       ]);
-      this.recordCmd(id, payload);
+      this.recordCmd(id, payloadRaw); // record what actually goes to the terminal
     });
     // real terminal: write the line to the live PTY so it actually reaches the shell/host
     this.writeToPty(payloadRaw + '\n');
+    this.recordCmd(this.xtermSessId || this.state.activeTab, payloadRaw);
     this.setState(s => ({ sender: Object.assign({}, s.sender, { sent: s.sender.sent + 1 }) }), () => {
       const ms = Math.max(50, Math.round(parseFloat(this.state.sender.interval || '1') * 1000));
       this.senderTimer = setTimeout(() => this.senderTick(), ms);
@@ -2221,7 +2238,7 @@ class Component extends DCLogic {
   runQuick(cmd) {
     this.setState({ quickOpen: false });
     // run in the real terminal when available; otherwise the scripted fallback
-    if (this.xterm && this.xtermId && window.__TAURI__) { this.writeToPty(cmd + '\n'); this.recordCmd(this.state.activeTab, cmd); return; }
+    if (this.xterm && this.xtermId && window.__TAURI__) { this.writeToPty(cmd + '\n'); this.recordCmd(this.xtermSessId || this.state.activeTab, cmd); return; }
     if (this.state.activeTab) this.execLocal(cmd);
   }
 
