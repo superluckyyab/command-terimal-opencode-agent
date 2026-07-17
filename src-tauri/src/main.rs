@@ -184,15 +184,22 @@ fn pty_kill(id: String, state: State<PtyState>) -> Result<(), String> {
 }
 
 // Read an arbitrary local file (used to upload a dropped file over zmodem).
+// Async for the same reason as run_command: large files must not block the UI.
 #[tauri::command]
-fn read_file(path: String) -> Result<Vec<u8>, String> {
-    std::fs::read(&path).map_err(|e| e.to_string())
+async fn read_file(path: String) -> Result<Vec<u8>, String> {
+    tauri::async_runtime::spawn_blocking(move || std::fs::read(&path).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 // Write a file received over zmodem (sz) to the path the user picked.
 #[tauri::command]
-fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
-    std::fs::write(&path, &data).map_err(|e| e.to_string())
+async fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        std::fs::write(&path, &data).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 fn exe_dir() -> Option<std::path::PathBuf> {
@@ -297,8 +304,23 @@ fn resolve_program(program: &str) -> String {
 
 // Run a process to completion, feeding `input` on stdin (so we avoid shell
 // quoting), returning its output. Used to drive the installed `opencode` CLI.
+//
+// MUST be async: a sync #[tauri::command] executes on the main event loop, and
+// blocking there for the whole opencode run froze the entire UI. The wait now
+// happens on a worker thread while the window keeps painting and responding.
 #[tauri::command]
-fn run_command(
+async fn run_command(
+    program: String,
+    args: Vec<String>,
+    input: Option<String>,
+    cwd: Option<String>,
+) -> Result<CmdOut, String> {
+    tauri::async_runtime::spawn_blocking(move || run_command_blocking(program, args, input, cwd))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn run_command_blocking(
     program: String,
     args: Vec<String>,
     input: Option<String>,
