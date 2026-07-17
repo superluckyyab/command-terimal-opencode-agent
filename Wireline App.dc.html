@@ -625,6 +625,16 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         <input class="input" type="text" value="{{ recDir }}" onChange="{{ onRecDir }}" style="max-width:380px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
       </div>
 
+      <div class="field" style="margin-bottom:22px">
+        <label>Settings file</label>
+        <div style="display:flex;gap:8px;align-items:center;max-width:560px">
+          <input class="input" type="text" value="{{ cfgPath }}" onChange="{{ onCfgPath }}" style="flex:1;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+          <button class="btn btn-secondary" style="flex:none;padding-block:6px" onClick="{{ browseCfgPath }}">Browse…</button>
+          <button class="btn btn-ghost" style="flex:none;padding-block:6px" onClick="{{ resetCfgPath }}">Default</button>
+        </div>
+        <div style="font-size:11px;color:var(--color-neutral-600);margin-top:5px">Kept next to the application so a portable copy carries its own settings. Falls back to your user profile if the app folder is read-only.</div>
+      </div>
+
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--color-accent-2-100);border-radius:var(--radius-md);font-size:12.5px;color:var(--color-accent-2-800)">
         <span style="width:6px;height:6px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
         Current mode: <strong>{{ modeWord }}</strong> — {{ modeNote }}
@@ -1342,6 +1352,7 @@ class Component extends DCLogic {
       model: 'opencode',
       models: ['opencode'],
       recDirListOn: false,
+      cfgPath: '', // resolved on mount (defaults to the app's own folder)
       termSel: 0,
       termSuggHide: false,
       timeout: '120',
@@ -1367,27 +1378,83 @@ class Component extends DCLogic {
 
   componentDidMount() {
     this.applyBodyTheme();
-    try {
-      const s = JSON.parse(localStorage.getItem('wireline-model-v1') || 'null');
-      if (s) this.setState({ apiBase: s.apiBase || '', apiKey: s.apiKey || '', model: s.model || this.state.model });
-    } catch (e) {}
-    try {
-      const ok = JSON.parse(localStorage.getItem('wireline-onekeys-v2') || 'null');
-      if (Array.isArray(ok)) this.setState({ oneKeys: ok, activeKey: ok[0] ? ok[0].id : null });
-    } catch (e) {}
-    try {
-      const qc = JSON.parse(localStorage.getItem('wireline-quickcmds-v2') || 'null');
-      if (qc && Array.isArray(qc.cmds)) this.setState({
-        quickCmds: qc.cmds,
-        quickGroups: (Array.isArray(qc.groups) && qc.groups.length) ? qc.groups : ['Quick']
-      });
-    } catch (e) {}
+    this.loadConfig();
     this.keyHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) { e.preventDefault(); this.setState(s => ({ paletteOpen: !s.paletteOpen, paletteQuery: '', paletteSel: 0 })); }
       else if (e.key === 'Escape' && this.state.paletteOpen) this.setState({ paletteOpen: false });
     };
     window.addEventListener('keydown', this.keyHandler);
     this.initXterm();
+  }
+
+  // ─── settings storage ───
+  // Settings live in wireline.config.json NEXT TO THE EXECUTABLE, so a portable
+  // copy carries its own config instead of leaving it under C:\Users\…\AppData.
+  // Anything previously kept in localStorage is migrated in on first run — old
+  // config is never dropped, only copied across.
+  legacyConfig() {
+    const cfg = {};
+    try { const s = JSON.parse(localStorage.getItem('wireline-model-v1') || 'null'); if (s) cfg.model = s; } catch (e) {}
+    try { const ok = JSON.parse(localStorage.getItem('wireline-onekeys-v1') || 'null'); if (Array.isArray(ok)) cfg.oneKeys = ok; } catch (e) {}
+    try { const qc = JSON.parse(localStorage.getItem('wireline-quickcmds-v1') || 'null'); if (qc && Array.isArray(qc.cmds)) { cfg.quickCmds = qc.cmds; cfg.quickGroups = qc.groups; } } catch (e) {}
+    try { const d = localStorage.getItem('wireline-log-dir'); if (d) cfg.logDir = d; } catch (e) {}
+    return Object.keys(cfg).length ? cfg : null;
+  }
+
+  applyConfig(cfg) {
+    if (!cfg) return;
+    const next = {};
+    if (cfg.model) { next.apiBase = cfg.model.apiBase || ''; next.apiKey = cfg.model.apiKey || ''; if (cfg.model.model) next.model = cfg.model.model; }
+    if (Array.isArray(cfg.oneKeys)) { next.oneKeys = cfg.oneKeys; next.activeKey = cfg.oneKeys[0] ? cfg.oneKeys[0].id : null; }
+    if (Array.isArray(cfg.quickCmds)) next.quickCmds = cfg.quickCmds;
+    if (Array.isArray(cfg.quickGroups) && cfg.quickGroups.length) next.quickGroups = cfg.quickGroups;
+    if (cfg.logDir) next.recDir = cfg.logDir;
+    if (Object.keys(next).length) this.setState(next);
+  }
+
+  currentConfig() {
+    const st = this.state;
+    return {
+      oneKeys: st.oneKeys,
+      quickCmds: st.quickCmds,
+      quickGroups: st.quickGroups,
+      model: { apiBase: st.apiBase, apiKey: st.apiKey, model: st.model },
+      logDir: st.recDir
+    };
+  }
+
+  async loadConfig() {
+    if (!window.__TAURI__) { this.applyConfig(this.legacyConfig()); return; } // browser preview
+    const inv = window.__TAURI__.invoke;
+    let custom = '';
+    try { custom = localStorage.getItem('wireline-config-path') || ''; } catch (e) {}
+    this._cfgPath = custom || null;
+    let def = '';
+    try { def = await inv('config_default_path'); } catch (e) {}
+    this._cfgDefault = def;
+    let cfg = null;
+    try { const raw = await inv('config_read', { path: this._cfgPath }); if (raw) cfg = JSON.parse(raw); } catch (e) {}
+    if (!cfg) {
+      // no file yet → carry over whatever this machine already had
+      cfg = this.legacyConfig();
+      if (cfg) { this.applyConfig(cfg); setTimeout(() => this.saveConfig(), 0); }
+    } else {
+      this.applyConfig(cfg);
+    }
+    this.setState({ cfgPath: this._cfgPath || def || '' });
+  }
+
+  async saveConfig() {
+    if (!window.__TAURI__) return;
+    try { await window.__TAURI__.invoke('config_write', { path: this._cfgPath, data: JSON.stringify(this.currentConfig(), null, 2) }); } catch (e) {}
+  }
+
+  async setConfigPath(p) {
+    p = (p || '').trim();
+    this._cfgPath = p || null;
+    try { if (p) localStorage.setItem('wireline-config-path', p); else localStorage.removeItem('wireline-config-path'); } catch (e) {}
+    await this.saveConfig();
+    this.setState({ cfgPath: p || this._cfgDefault || '' });
   }
 
   // Real terminal: xterm.js (the same engine Tabby uses) bound to a native PTY
@@ -1909,7 +1976,8 @@ class Component extends DCLogic {
     const qj = JSON.stringify({ g: this.state.quickGroups, c: this.state.quickCmds });
     if (qj !== this._lastQuickJson) {
       this._lastQuickJson = qj;
-      try { localStorage.setItem('wireline-quickcmds-v2', JSON.stringify({ groups: this.state.quickGroups, cmds: this.state.quickCmds })); } catch (e) {}
+      try { localStorage.setItem('wireline-quickcmds-v1', JSON.stringify({ groups: this.state.quickGroups, cmds: this.state.quickCmds })); } catch (e) {}
+      this.saveConfig();
     }
     const t = this.termRef.current;
     if (t) {
@@ -2509,6 +2577,7 @@ class Component extends DCLogic {
 
   persistModelCfg() {
     try { localStorage.setItem('wireline-model-v1', JSON.stringify({ apiBase: this.state.apiBase, apiKey: this.state.apiKey, model: this.state.model })); } catch (e) {}
+    this.saveConfig();
   }
 
   // ─── AI Operator ───
@@ -2869,7 +2938,9 @@ class Component extends DCLogic {
   }
 
   persistOneKeys(list) {
-    try { localStorage.setItem('wireline-onekeys-v2', JSON.stringify(list || this.state.oneKeys)); } catch (e) {}
+    // keep the legacy copy (so an older build still sees it) and write the file
+    try { localStorage.setItem('wireline-onekeys-v1', JSON.stringify(list || this.state.oneKeys)); } catch (e) {}
+    this.saveConfig();
   }
 
   // Set the identity-file path for one of the Public Key rows (Linux/macOS/Windows).
@@ -3940,6 +4011,16 @@ class Component extends DCLogic {
       // settings
       guards, model: st.model, onModel: (e) => this.setState({ model: e.target.value }, () => this.persistModelCfg()),
       timeout: st.timeout, onTimeout: (e) => this.setState({ timeout: e.target.value }),
+      cfgPath: st.cfgPath || '',
+      onCfgPath: (e) => { const v = e.target.value; this.setState({ cfgPath: v }); },
+      browseCfgPath: async () => {
+        const T = window.__TAURI__; if (!T || !T.dialog) return;
+        try {
+          const p = await T.dialog.save({ defaultPath: this.state.cfgPath || 'wireline.config.json' });
+          if (p) this.setConfigPath(p);
+        } catch (e) {}
+      },
+      resetCfgPath: () => this.setConfigPath(''),
       apiBase: st.apiBase, onApiBase: (e) => this.setState({ apiBase: e.target.value }, () => this.persistModelCfg()),
       apiKey: st.apiKey, onApiKey: (e) => this.setState({ apiKey: e.target.value }, () => this.persistModelCfg()),
       // dialog

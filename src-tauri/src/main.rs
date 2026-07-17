@@ -195,6 +195,56 @@ fn write_file(path: String, data: Vec<u8>) -> Result<(), String> {
     std::fs::write(&path, &data).map_err(|e| e.to_string())
 }
 
+fn exe_dir() -> Option<std::path::PathBuf> {
+    std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+}
+
+// Settings live next to the executable so a portable/green copy carries its own
+// config. If that directory isn't writable (installed under Program Files), fall
+// back to the user profile instead of failing.
+fn default_cfg_path() -> std::path::PathBuf {
+    if let Some(d) = exe_dir() {
+        let probe = d.join(".wireline_write_test");
+        if std::fs::write(&probe, b"").is_ok() {
+            let _ = std::fs::remove_file(&probe);
+            return d.join("wireline.config.json");
+        }
+    }
+    dirs_home()
+        .map(|h| h.join(".wireline").join("wireline.config.json"))
+        .unwrap_or_else(|| std::path::PathBuf::from("wireline.config.json"))
+}
+
+fn resolve_cfg(path: Option<String>) -> std::path::PathBuf {
+    match path {
+        Some(p) if !p.trim().is_empty() => std::path::PathBuf::from(p),
+        _ => default_cfg_path(),
+    }
+}
+
+#[tauri::command]
+fn config_default_path() -> String {
+    default_cfg_path().to_string_lossy().into_owned()
+}
+
+#[tauri::command]
+fn config_read(path: Option<String>) -> Result<String, String> {
+    let p = resolve_cfg(path);
+    Ok(std::fs::read_to_string(&p).unwrap_or_default())
+}
+
+#[tauri::command]
+fn config_write(path: Option<String>, data: String) -> Result<String, String> {
+    let p = resolve_cfg(path);
+    if let Some(parent) = p.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::write(&p, data).map_err(|e| e.to_string())?;
+    Ok(p.to_string_lossy().into_owned())
+}
+
 fn dirs_home() -> Option<std::path::PathBuf> {
     std::env::var_os("HOME")
         .or_else(|| std::env::var_os("USERPROFILE"))
@@ -326,7 +376,7 @@ fn main() {
         .manage(PtyState::default())
         .invoke_handler(tauri::generate_handler![
             pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill, run_command, read_file,
-            write_file
+            write_file, config_default_path, config_read, config_write
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
