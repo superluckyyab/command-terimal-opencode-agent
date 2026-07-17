@@ -1437,6 +1437,7 @@ class Component extends DCLogic {
     this.loadConfig();
     this.keyHandler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'P' || e.key === 'p')) { e.preventDefault(); this.setState(s => ({ paletteOpen: !s.paletteOpen, paletteQuery: '', paletteSel: 0 })); }
+      else if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f')) { e.preventDefault(); this.setState({ searchOpen: true }); }
       else if (e.key === 'Escape' && this.state.paletteOpen) this.setState({ paletteOpen: false });
     };
     window.addEventListener('keydown', this.keyHandler);
@@ -1617,13 +1618,28 @@ class Component extends DCLogic {
       fontSize: 13,
       cursorBlink: true,
       scrollback: 5000,
-      theme: { background: '#1b1a19', foreground: '#e8e5e3', cursor: '#3fb5d6' }
+      // full ANSI-16 palette so server-side colors (ls --color, grep, logs)
+      // render with proper contrast instead of xterm's stock palette
+      theme: {
+        background: '#1b1a19', foreground: '#e8e5e3', cursor: '#3fb5d6',
+        selection: 'rgba(63,181,214,.30)', selectionBackground: 'rgba(63,181,214,.30)',
+        black: '#3a3836', red: '#e5484d', green: '#57c477', yellow: '#e8a33d',
+        blue: '#6f8bef', magenta: '#c069ce', cyan: '#27c2d4', white: '#c9c5c3',
+        brightBlack: '#78736f', brightRed: '#ff7377', brightGreen: '#74dd92',
+        brightYellow: '#ffc766', brightBlue: '#8fa7ff', brightMagenta: '#dd8aeb',
+        brightCyan: '#4fdbeb', brightWhite: '#f2f0ef'
+      }
     });
     let fit = null, search = null;
     try { fit = new window.FitAddon.FitAddon(); term.loadAddon(fit); } catch (e) {}
     try { search = new window.SearchAddon.SearchAddon(); term.loadAddon(search); } catch (e) {}
     term.open(el);
-    const pane = { pid, el, term, fit, search, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0 };
+    const pane = { pid, el, term, fit, search, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0, fgActive: false };
+    // WindTerm-style convenience: selecting text copies it to the clipboard
+    term.onSelectionChange(() => {
+      const s = term.getSelection();
+      if (s && s.length > 0) { try { navigator.clipboard.writeText(s); } catch (e) {} }
+    });
     // WindTerm-style gutter: a timestamp per output line, aligned to xterm rows.
     // Each timestamp is carried by an xterm marker pinned to its buffer line, so
     // a line keeps the time it was written through scrolling/resizing/reflow.
@@ -1636,6 +1652,7 @@ class Component extends DCLogic {
           const m = term.registerMarker(0);
           if (!m) return;
           m.__ts = new Date().toTimeString().slice(0, 8);
+          m.__d = Date.now(); // full moment, shown on hover
           pane.marks.push(m);
           if (pane.marks.length > 4000) { const old = pane.marks.shift(); try { old.dispose(); } catch (e) {} }
         } catch (e) {}
@@ -1727,6 +1744,8 @@ class Component extends DCLogic {
     divider.style.cssText = 'flex:none;' + (isRow ? 'width:5px;cursor:col-resize;' : 'height:5px;cursor:row-resize;') + 'background:#2a2827;z-index:4';
     divider.addEventListener('mouseenter', () => { divider.style.background = 'rgba(63,181,214,.5)'; });
     divider.addEventListener('mouseleave', () => { divider.style.background = '#2a2827'; });
+    // double-click a divider → back to an even 50/50 split
+    divider.addEventListener('dblclick', () => { node.ratio = 0.5; apply(); this.fitAllPanes(); });
     divider.addEventListener('mousedown', (e) => {
       e.preventDefault();
       const rect = box.getBoundingClientRect();
@@ -1841,6 +1860,15 @@ class Component extends DCLogic {
           }
           this._pendingUploads = files;
           this.writeToPty('rz\r'); // remote starts receiving; the sentry sends the dropped files
+          // if the remote never answers, say WHY instead of hanging silently
+          clearTimeout(this._rzTimer);
+          this._rzTimer = setTimeout(() => {
+            if (this._pendingUploads) {
+              this._pendingUploads = null;
+              const p = this.pane();
+              if (p) { try { p.term.write('\r\n\x1b[33m[rz 无响应 — 请确认远端已安装 lrzsz（Debian/Ubuntu: apt install lrzsz / CentOS: yum install lrzsz）]\x1b[0m\r\n'); } catch (e) {} }
+            }
+          }, 6000);
         } catch (e) {
           // fallback: just paste the path
           this.writeToPty(paths.map(p => /\s/.test(p) ? '"' + p + '"' : p).join(' ') + ' ');
@@ -1892,15 +1920,69 @@ class Component extends DCLogic {
       const pw = pane.pendPass;
       setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: pw + '\n' }).catch(() => {}); }, 120);
     }
-    // Client-side quick color — ONLY on chunks that contain no escape sequence at
-    // all. Anything with an ESC is a program driving the screen (vim, less, any
-    // cursor positioning like \x1b[46;1H): injecting colour there splits the
-    // sequence and garbles the display. Also skip a split multibyte char, so
-    // xterm reassembles CJK from the raw bytes.
+    // Client-side quick color. Plain chunks are colorized whole; chunks whose
+    // ONLY escapes are SGR (style) sequences — a colored prompt, grep output —
+    // get their plain segments colorized too, but only while the server's own
+    // foreground color is at the default, so we never stomp server styling.
+    // Anything with cursor-movement escapes (vim, less, \x1b[46;1H…) is a
+    // program driving the screen: write it untouched. Also skip a split
+    // multibyte char, so xterm reassembles CJK from the raw bytes.
     const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
-    const hasEsc = text.indexOf('\x1b') >= 0;
-    if (this.state.ipColor && inNormal && text && !hasEsc && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text));
-    else term.write(u8);
+    if (this.state.ipColor && inNormal && text && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) {
+      if (text.indexOf('\x1b') < 0) {
+        term.write(pane.fgActive ? text : this.ipColorize(text));
+        return;
+      }
+      const sgrOnly = text.replace(/\x1b\[[0-9;]*m/g, '').indexOf('\x1b') < 0;
+      if (sgrOnly) { term.write(this.colorizePlainSegments(pane, text)); return; }
+    }
+    this.updateFgState(pane, text);
+    term.write(u8);
+  }
+
+  // Walk SGR sequences to know whether a non-default foreground color is
+  // active, so token colorizing never overrides server styling.
+  updateFgState(pane, text) {
+    const re = /\x1b\[([0-9;]*)m/g;
+    let m;
+    while ((m = re.exec(text)) !== null) {
+      const params = m[1] === '' ? ['0'] : m[1].split(';');
+      for (const p of params) {
+        const n = parseInt(p, 10);
+        if (n === 0 || n === 39) pane.fgActive = false;
+        else if ((n >= 30 && n <= 38) || (n >= 90 && n <= 97)) pane.fgActive = true;
+      }
+    }
+  }
+
+  // Colorize the plain segments of an SGR-only chunk, leaving the server's own
+  // escape sequences untouched and pausing while its foreground is active.
+  colorizePlainSegments(pane, text) {
+    const re = /\x1b\[[0-9;]*m/g;
+    let out = '', last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      const seg = text.slice(last, m.index);
+      out += pane.fgActive ? seg : this.ipColorize(seg);
+      out += m[0];
+      const params = m[0].slice(2, -1) === '' ? ['0'] : m[0].slice(2, -1).split(';');
+      for (const p of params) {
+        const n = parseInt(p, 10);
+        if (n === 0 || n === 39) pane.fgActive = false;
+        else if ((n >= 30 && n <= 38) || (n >= 90 && n <= 97)) pane.fgActive = true;
+      }
+      last = m.index + m[0].length;
+    }
+    const tail = text.slice(last);
+    out += pane.fgActive ? tail : this.ipColorize(tail);
+    return out;
+  }
+
+  // Full human-readable moment for the gutter hover tooltip.
+  fmtFullTs(ms) {
+    const d = new Date(ms);
+    const p = (n) => (n < 10 ? '0' : '') + n;
+    const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' 周' + wd;
   }
 
   writeBytesToPty(pane, octets) {
@@ -1960,6 +2042,7 @@ class Component extends DCLogic {
         .then(() => { try { zsession.close(); } catch (e) {} note('Upload complete'); })
         .catch((e) => { try { zsession.close(); } catch (er) {} note('Upload failed: ' + (e && (e.message || e))); });
     };
+    clearTimeout(this._rzTimer);
     if (this._pendingUploads && this._pendingUploads.length) {
       const files = this._pendingUploads; this._pendingUploads = null;
       send(files);
@@ -2055,7 +2138,7 @@ class Component extends DCLogic {
       const offY = rrect.top - hrect.top;
       const viewportY = buf.viewportY;
       const kids = rowsEl.children;
-      // marker line → timestamp, for the visible window only
+      // marker line → timestamp (+ full moment for the hover tooltip)
       const map = {};
       const marks = pane.marks || [];
       const last = viewportY + kids.length;
@@ -2063,18 +2146,20 @@ class Component extends DCLogic {
         const m = marks[j];
         if (!m || m.isDisposed) continue;
         const l = m.line;
-        if (l >= viewportY && l < last) map[l] = m.__ts;
+        if (l >= viewportY && l < last) map[l] = m;
       }
       let html = '';
       for (let i = 0; i < kids.length; i++) {
-        const ts = map[viewportY + i];
-        if (!ts) continue;
+        const mk = map[viewportY + i];
+        if (!mk || !mk.__ts) continue;
         const line = buf.getLine(viewportY + i);
         if (line && line.isWrapped) continue; // continuation of the row above
         const k = kids[i];
         const top = offY + k.offsetTop, h = k.offsetHeight;
-        html += '<div style="position:absolute;top:' + top + 'px;right:5px;height:' + h + 'px;line-height:' + h + 'px;white-space:nowrap">'
-          + '<span style="color:#5f5b59">[' + ts + ']</span></div>';
+        // hover shows the full, human-readable moment (date + weekday)
+        const full = mk.__d ? this.fmtFullTs(mk.__d) : '';
+        html += '<div title="' + full + '" style="position:absolute;top:' + top + 'px;right:5px;height:' + h + 'px;line-height:' + h + 'px;white-space:nowrap;pointer-events:auto;cursor:default">'
+          + '<span style="color:#5f5b59">[' + mk.__ts + ']</span></div>';
       }
       gutter.innerHTML = html;
     } catch (e) {}
@@ -2192,7 +2277,7 @@ class Component extends DCLogic {
 
   applyBodyTheme() {
     const dark = this.state.dark;
-    const bg = dark ? '#1b1a19' : '#f3f2f2';
+    const bg = dark ? '#171615' : '#f3f2f2';
     const fg = dark ? '#e9e6e4' : '#201e1d';
     document.documentElement.style.setProperty('background', bg, 'important');
     document.body.style.setProperty('background', bg, 'important');
@@ -3398,9 +3483,10 @@ class Component extends DCLogic {
         w: on ? '600' : '400',
         dragBg: 'transparent',
         activate: () => this.setState({ activeTab: id }),
+
         close: (e) => this.closeTab(id, e),
         ctx: (e) => { e.preventDefault(); this.setState({ tabCtx: { open: true, x: e.clientX, y: e.clientY, id } }); },
-        down: (e) => this.startTabDrag(e, idx)
+        down: (e) => { if (e.button === 1) { e.preventDefault(); this.closeTab(id, e); return; } this.startTabDrag(e, idx); }
       };
     }).filter(Boolean);
 
@@ -3946,7 +4032,10 @@ class Component extends DCLogic {
       // menus
       menus, menuOpenAny: st.openMenu !== null, closeMenus,
       // theme (dark)
-      themeVars: st.dark ? '--color-bg:#1b1a19;--color-surface:#262322;--color-text:#e9e6e4;--color-divider:rgba(255,255,255,.12);--color-neutral-100:#232120;--color-neutral-200:#2d2b29;--color-neutral-300:#3a3836;--color-neutral-400:#6f6b69;--color-neutral-500:#8f8b89;--color-neutral-600:#a8a4a2;--color-neutral-700:#c6c2c0;--color-neutral-800:#dedad8;--color-accent-100:rgba(0,136,176,.22);--color-accent-2-100:rgba(214,0,108,.22)' : '',
+      // dark theme: chrome sits DEEPER than the terminal (#1b1a19) so the
+      // terminal reads as the lit focal surface; dividers are quieter and
+      // neutrals lifted a step for legibility (material-weight hierarchy)
+      themeVars: st.dark ? '--color-bg:#171615;--color-surface:#211f1e;--color-text:#eceae8;--color-divider:rgba(255,255,255,.09);--color-neutral-100:#1d1c1b;--color-neutral-200:#2a2827;--color-neutral-300:#3a3836;--color-neutral-400:#726e6b;--color-neutral-500:#928e8b;--color-neutral-600:#aca8a5;--color-neutral-700:#c9c5c3;--color-neutral-800:#e0dcda;--color-accent-100:rgba(0,150,190,.20);--color-accent-2-100:rgba(214,0,108,.20)' : '',
       toggleDark: () => this.setState(s => ({ dark: !s.dark })),
       darkIcon: st.dark ? '☼' : '☾',
       darkTip: st.dark ? 'Switch to light' : 'Dark mode',

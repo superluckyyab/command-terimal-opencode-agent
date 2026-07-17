@@ -16,8 +16,13 @@ struct PtySession {
     killer: Box<dyn portable_pty::ChildKiller + Send + Sync>,
 }
 
-#[derive(Default)]
-struct PtyState(Mutex<HashMap<String, PtySession>>);
+// Arc so async commands can move a clone into spawn_blocking: every PTY
+// command runs off the main event loop, because a blocking write into a full
+// pty buffer (zmodem uploads!) would otherwise freeze the whole UI.
+#[derive(Default, Clone)]
+struct PtyState(std::sync::Arc<Mutex<HashMap<String, PtySession>>>);
+
+type PtyMap = std::sync::Arc<Mutex<HashMap<String, PtySession>>>;
 
 #[derive(Clone, Serialize)]
 struct PtyData {
@@ -39,17 +44,34 @@ fn default_shell() -> String {
 }
 
 #[tauri::command]
-fn pty_spawn(
+async fn pty_spawn(
     id: String,
     cols: u16,
     rows: u16,
     program: Option<String>,
     args: Option<Vec<String>>,
     app: tauri::AppHandle,
-    state: State<PtyState>,
+    state: State<'_, PtyState>,
+) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        pty_spawn_blocking(id, cols, rows, program, args, app, st)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn pty_spawn_blocking(
+    id: String,
+    cols: u16,
+    rows: u16,
+    program: Option<String>,
+    args: Option<Vec<String>>,
+    app: tauri::AppHandle,
+    st: PtyMap,
 ) -> Result<(), String> {
     {
-        let map = state.0.lock().unwrap();
+        let map = st.lock().unwrap();
         if map.contains_key(&id) {
             return Ok(());
         }
@@ -124,7 +146,7 @@ fn pty_spawn(
         let _ = app3.emit_all("pty://exit", PtyExit { id: id3 });
     });
 
-    let mut map = state.0.lock().unwrap();
+    let mut map = st.lock().unwrap();
     map.insert(
         id,
         PtySession {
@@ -137,50 +159,79 @@ fn pty_spawn(
 }
 
 #[tauri::command]
-fn pty_write(id: String, data: String, state: State<PtyState>) -> Result<(), String> {
-    let mut map = state.0.lock().unwrap();
-    if let Some(s) = map.get_mut(&id) {
-        s.writer
-            .write_all(data.as_bytes())
-            .map_err(|e| e.to_string())?;
-        s.writer.flush().map_err(|e| e.to_string())?;
-    }
-    Ok(())
+async fn pty_write(id: String, data: String, state: State<'_, PtyState>) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut map = st.lock().unwrap();
+        if let Some(s) = map.get_mut(&id) {
+            s.writer
+                .write_all(data.as_bytes())
+                .map_err(|e| e.to_string())?;
+            s.writer.flush().map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn pty_write_bytes(id: String, data: Vec<u8>, state: State<PtyState>) -> Result<(), String> {
-    let mut map = state.0.lock().unwrap();
-    if let Some(s) = map.get_mut(&id) {
-        s.writer.write_all(&data).map_err(|e| e.to_string())?;
-        s.writer.flush().map_err(|e| e.to_string())?;
-    }
-    Ok(())
+async fn pty_write_bytes(
+    id: String,
+    data: Vec<u8>,
+    state: State<'_, PtyState>,
+) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut map = st.lock().unwrap();
+        if let Some(s) = map.get_mut(&id) {
+            s.writer.write_all(&data).map_err(|e| e.to_string())?;
+            s.writer.flush().map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn pty_resize(id: String, cols: u16, rows: u16, state: State<PtyState>) -> Result<(), String> {
-    let map = state.0.lock().unwrap();
-    if let Some(s) = map.get(&id) {
-        s.master
-            .resize(PtySize {
-                rows,
-                cols,
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| e.to_string())?;
-    }
-    Ok(())
+async fn pty_resize(
+    id: String,
+    cols: u16,
+    rows: u16,
+    state: State<'_, PtyState>,
+) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let map = st.lock().unwrap();
+        if let Some(s) = map.get(&id) {
+            s.master
+                .resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                })
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-fn pty_kill(id: String, state: State<PtyState>) -> Result<(), String> {
-    let mut map = state.0.lock().unwrap();
-    if let Some(mut s) = map.remove(&id) {
-        let _ = s.killer.kill();
-    }
-    Ok(())
+async fn pty_kill(id: String, state: State<'_, PtyState>) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut map = st.lock().unwrap();
+        if let Some(mut s) = map.remove(&id) {
+            let _ = s.killer.kill();
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 // Read an arbitrary local file (used to upload a dropped file over zmodem).
