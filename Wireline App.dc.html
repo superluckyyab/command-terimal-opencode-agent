@@ -275,6 +275,16 @@ body.wl-dragging .wb-grid{transition:none}
         <span onClick="{{ tbReconnect }}" title="Connect / reconnect" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 3.5v3h-3M3 12.5v-3h3"></path><path d="M12.5 6.5A5 5 0 003.6 5M3.5 9.5a5 5 0 008.9 1.5"></path></svg>
         </span>
+        <span style="width:1px;height:16px;background:var(--color-divider);flex:none"></span>
+        <span onClick="{{ splitH }}" title="Split horizontally — 左右分屏" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M8 3v10"></path></svg>
+        </span>
+        <span onClick="{{ splitV }}" title="Split vertically — 上下分屏" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M2 8h12"></path></svg>
+        </span>
+        <span onClick="{{ closePaneBtn }}" title="Close pane — 关闭当前分屏" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M6 6.5l4 3M10 6.5l-4 3"></path></svg>
+        </span>
         <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:28px;padding:0 10px;border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-surface)">
           <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="var(--color-neutral-600)" stroke-width="1.4"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 5v3l2 1.5"></path></svg>
           <span style="font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--color-neutral-600);flex:none">{{ tbProto }} ▸</span>
@@ -1503,16 +1513,32 @@ class Component extends DCLogic {
     this.setState({ cfgPath: p || this._cfgDefault || '' });
   }
 
-  // Real terminal: xterm.js (the same engine Tabby uses) bound to a native PTY
-  // over Tauri commands. Only runs inside the desktop app (window.__TAURI__);
-  // in a plain browser it stays dormant and the scripted terminal shows instead.
-  // The single xterm follows the active tab: an SSH session (with a real address)
-  // runs the OS `ssh` client through the PTY; anything else runs the local shell.
-  // ponytail: one live PTY at a time (reconnects on tab switch); persistent
-  // per-tab sessions + serial/telnet transports are future work.
+  // ─── Real terminal: xterm.js + native PTY, with WindTerm-style SPLIT PANES ───
+  // Each pane owns its own xterm + its own PTY (split = another live connection
+  // to the same session). The ACTIVE pane is what the AI Operator, quick
+  // commands, Find and the command-history panel talk to; the getters below
+  // alias the active pane so the rest of the app keeps working unchanged.
+  // Lines always wrap at the pane edge: every pane refits (cols/rows) through a
+  // ResizeObserver whenever its container resizes, so xterm's own wrapping
+  // matches the visible width.
   xtermAvailable() {
     return !!(window.__TAURI__ && typeof window.Terminal !== 'undefined');
   }
+
+  get xterm() { const p = this.pane(); return p ? p.term : null; }
+  get xtermId() { const p = this.pane(); return p ? p.ptyId : null; }
+  get xtermSessId() { const p = this.pane(); return p ? p.sessId : null; }
+  get xtermSearch() { const p = this.pane(); return p ? p.search : null; }
+
+  pane(pid) { return this.panes ? this.panes.get(pid || this.activePid) : null; }
+
+  paneByPty(ptyId) {
+    if (!this.panes) return null;
+    for (const p of this.panes.values()) if (p.ptyId === ptyId) return p;
+    return null;
+  }
+
+  paneCount() { return this.panes ? this.panes.size : 0; }
 
   // ssh/telnet command for a real user-created session; null → local default shell.
   sshSpecFor(sess) {
@@ -1543,28 +1569,31 @@ class Component extends DCLogic {
     return { program: 'ssh', args };
   }
 
-  connectSession(sess) {
-    if (!this.xterm || !window.__TAURI__) return;
+  // Backwards-compatible entry point: connect the ACTIVE pane.
+  connectSession(sess) { const p = this.pane(); if (p) this.connectPane(p, sess); }
+
+  connectPane(pane, sess) {
+    if (!pane || !pane.term || !window.__TAURI__) return;
     const invoke = window.__TAURI__.invoke;
-    const term = this.xterm;
+    const term = pane.term;
     // Reconnecting the SAME session (e.g. after an ssh timeout) must keep what
     // is already on screen — scroll up and the earlier output is still there.
     // Only switching to a different session starts with a clean terminal.
-    const sameSession = !!(sess && this.xtermSessId && this.xtermSessId === sess.id);
-    if (this.xtermId) invoke('pty_kill', { id: this.xtermId }).catch(() => {});
+    const sameSession = !!(sess && pane.sessId && pane.sessId === sess.id);
+    if (pane.ptyId) invoke('pty_kill', { id: pane.ptyId }).catch(() => {});
     const spec = this.sshSpecFor(sess);
     const id = 'pty:' + (sess ? sess.id : 'shell') + ':' + (++this.seq);
-    this.xtermId = id;
-    this.xtermSessId = sess ? sess.id : null;
-    this._pendPass = (sess && sess.pass) ? sess.pass : '';
-    this._pwSent = false;
-    this._ptyDead = false;
-    this._lineBuf = '';
+    pane.ptyId = id;
+    pane.sessId = sess ? sess.id : null;
+    pane.pendPass = (sess && sess.pass) ? sess.pass : '';
+    pane.pwSent = false;
+    pane.ptyDead = false;
+    pane.lineBuf = '';
     if (!sameSession) {
       // different session → clean slate: clear screen and drop its timestamps
-      this._scroll = '';
-      (this._marks || []).forEach(m => { try { m.dispose(); } catch (e) {} });
-      this._marks = [];
+      pane.scroll = '';
+      (pane.marks || []).forEach(m => { try { m.dispose(); } catch (e) {} });
+      pane.marks = [];
       try { term.reset(); } catch (e) {}
     } else {
       // same session reconnect → keep the scrollback and its timestamps
@@ -1576,17 +1605,13 @@ class Component extends DCLogic {
     invoke('pty_spawn', payload).catch(err => term.write('\r\n[spawn failed: ' + err + ']\r\n'));
   }
 
-  initXterm() {
-    if (this.xterm || !this.xtermAvailable()) return;
-    const host = this.xtermHostRef.current;
-    if (!host) return;
-    const T = window.__TAURI__;
-    const invoke = T.invoke;
-    const listen = T.event && T.event.listen;
-    // left reserves the timestamp gutter; the rest is breathing room so text
-    // doesn't run into the window edges
-    host.style.padding = '8px 14px 8px 66px';
-    host.style.paddingRight = '14px'; // reserve room for the search match locator strip
+  // Build one pane: container div + xterm + gutter + zmodem sentry + handlers.
+  createPane() {
+    const pid = 'p' + (++this.seq);
+    const el = document.createElement('div');
+    // left padding reserves the timestamp gutter; right leaves room for the
+    // search locator strip
+    el.style.cssText = 'position:relative;overflow:hidden;background:#1b1a19;padding:8px 14px 8px 66px;box-sizing:border-box;min-width:120px;min-height:60px;flex:1 1 0';
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       fontSize: 13,
@@ -1594,63 +1619,218 @@ class Component extends DCLogic {
       scrollback: 5000,
       theme: { background: '#1b1a19', foreground: '#e8e5e3', cursor: '#3fb5d6' }
     });
-    let fit = null;
+    let fit = null, search = null;
     try { fit = new window.FitAddon.FitAddon(); term.loadAddon(fit); } catch (e) {}
-    try { this.xtermSearch = new window.SearchAddon.SearchAddon(); term.loadAddon(this.xtermSearch); } catch (e) { this.xtermSearch = null; }
-    term.open(host);
-    try { if (fit) fit.fit(); } catch (e) {}
-    this.xterm = term; this.xtermFit = fit;
-    // WindTerm-style gutter: a timestamp per output line, aligned to xterm rows
+    try { search = new window.SearchAddon.SearchAddon(); term.loadAddon(search); } catch (e) {}
+    term.open(el);
+    const pane = { pid, el, term, fit, search, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0 };
+    // WindTerm-style gutter: a timestamp per output line, aligned to xterm rows.
+    // Each timestamp is carried by an xterm marker pinned to its buffer line, so
+    // a line keeps the time it was written through scrolling/resizing/reflow.
     try {
-      this._marks = [];
-      this.xtermGutter = document.createElement('div');
-      this.xtermGutter.style.cssText = 'position:absolute;left:0;top:0;width:64px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
-      host.appendChild(this.xtermGutter);
-      // Anchor each timestamp to the actual buffer line with an xterm marker.
-      // A marker follows its line through scrolling/reflow, so a line's time is
-      // fixed once written: resizing (opening Sender/Find) can no longer shift
-      // the mapping, which is what made every timestamp jump on a UI click.
+      pane.gutter = document.createElement('div');
+      pane.gutter.style.cssText = 'position:absolute;left:0;top:0;width:64px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
+      el.appendChild(pane.gutter);
       term.onLineFeed(() => {
         try {
           const m = term.registerMarker(0);
           if (!m) return;
           m.__ts = new Date().toTimeString().slice(0, 8);
-          this._marks.push(m);
-          if (this._marks.length > 4000) { const old = this._marks.shift(); try { old.dispose(); } catch (e) {} }
+          pane.marks.push(m);
+          if (pane.marks.length > 4000) { const old = pane.marks.shift(); try { old.dispose(); } catch (e) {} }
         } catch (e) {}
       });
-      term.onRender(() => this.renderGutter());
-      term.onScroll(() => this.renderGutter());
-    } catch (e) { this.xtermGutter = null; }
-    this.ensureXtermTicks();
-    // zmodem sentry: intercepts rz/sz transfers in the PTY byte stream
-    this.zsentry = null;
+      term.onRender(() => this.renderGutter(pane));
+      term.onScroll(() => this.renderGutter(pane));
+    } catch (e) { pane.gutter = null; }
+    // zmodem sentry: intercepts rz/sz transfers in this pane's PTY byte stream
     if (window.Zmodem && window.Zmodem.Sentry) {
       try {
-        this.zsentry = new window.Zmodem.Sentry({
-          to_terminal: (octets) => this.termWriteOut(octets),
-          sender: (octets) => this.writeBytesToPty(octets),
+        pane.zsentry = new window.Zmodem.Sentry({
+          to_terminal: (octets) => this.termWriteOut(pane, octets),
+          sender: (octets) => this.writeBytesToPty(pane, octets),
           on_retract: () => {},
-          on_detect: (detection) => this.onZmodem(detection)
+          on_detect: (detection) => this.onZmodem(pane, detection)
         });
-      } catch (e) { this.zsentry = null; }
+      } catch (e) { pane.zsentry = null; }
     }
-    // handlers read this.xtermId dynamically so a reconnect routes to the new PTY
     term.onData(d => {
       // when the session has ended (e.g. ssh auto-logout), Enter reconnects the
       // SAME session in place instead of opening a new one
-      if (this._ptyDead) {
-        if (d.indexOf('\r') >= 0 || d.indexOf('\n') >= 0) { this.connectSession(this.sess(this.state.activeTab)); }
+      if (pane.ptyDead) {
+        if (d.indexOf('\r') >= 0 || d.indexOf('\n') >= 0) this.connectPane(pane, this.sess(pane.sessId) || this.sess(this.state.activeTab));
         return;
       }
-      this.captureTyped(d);
-      if (this.xtermId) invoke('pty_write', { id: this.xtermId, data: d }).catch(() => {});
+      this.captureTyped(pane, d);
+      if (pane.ptyId) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: d }).catch(() => {});
     });
-    term.onResize(({ cols, rows }) => { if (this.xtermId) invoke('pty_resize', { id: this.xtermId, cols, rows }).catch(() => {}); });
+    term.onResize(({ cols, rows }) => { if (pane.ptyId) window.__TAURI__.invoke('pty_resize', { id: pane.ptyId, cols, rows }).catch(() => {}); });
+    // focusing / clicking a pane makes it the active one
+    el.addEventListener('mousedown', () => this.setActivePane(pid));
+    try { if (term.textarea) term.textarea.addEventListener('focus', () => this.setActivePane(pid)); } catch (e) {}
+    // refit whenever the container resizes → cols match width → lines wrap
+    try {
+      pane.ro = new ResizeObserver(() => {
+        if (pane._raf) return;
+        pane._raf = requestAnimationFrame(() => { pane._raf = 0; this.fitPane(pane); });
+      });
+      pane.ro.observe(el);
+    } catch (e) {}
+    this.panes.set(pid, pane);
+    return pane;
+  }
+
+  fitPane(pane) {
+    try { if (pane.fit) pane.fit.fit(); } catch (e) {}
+    this.renderGutter(pane);
+  }
+
+  fitAllPanes() { if (this.panes) for (const p of this.panes.values()) this.fitPane(p); }
+
+  setActivePane(pid) {
+    if (!this.panes || !this.panes.has(pid)) return;
+    const changed = this.activePid !== pid;
+    this.activePid = pid;
+    this.stylePanes();
+    if (changed) {
+      // the locator strip belongs to the active pane only
+      for (const p of this.panes.values()) if (p.pid !== pid && p.ticks) p.ticks.style.display = 'none';
+      this.renderXtermTicks();
+      this.forceUpdate();
+    }
+  }
+
+  stylePanes() {
+    if (!this.panes) return;
+    const multi = this.panes.size > 1;
+    for (const p of this.panes.values()) {
+      p.el.style.boxShadow = multi
+        ? ('inset 0 0 0 1px ' + (p.pid === this.activePid ? 'rgba(63,181,214,.55)' : 'rgba(255,255,255,.07)'))
+        : 'none';
+    }
+  }
+
+  // ─── split layout: a binary tree of { pane } leaves and { dir, a, b, ratio } ───
+  buildLayoutDom(node) {
+    if (node.pane) { node.pane.el.style.flex = '1 1 0'; return node.pane.el; }
+    const isRow = node.dir === 'row';
+    const box = document.createElement('div');
+    box.style.cssText = 'display:flex;flex:1 1 0;min-width:0;min-height:0;flex-direction:' + (isRow ? 'row' : 'column');
+    const aEl = this.buildLayoutDom(node.a);
+    const bEl = this.buildLayoutDom(node.b);
+    const apply = () => {
+      aEl.style.flex = (node.ratio * 1000) + ' 1 0';
+      bEl.style.flex = ((1 - node.ratio) * 1000) + ' 1 0';
+    };
+    apply();
+    const divider = document.createElement('div');
+    divider.style.cssText = 'flex:none;' + (isRow ? 'width:5px;cursor:col-resize;' : 'height:5px;cursor:row-resize;') + 'background:#2a2827;z-index:4';
+    divider.addEventListener('mouseenter', () => { divider.style.background = 'rgba(63,181,214,.5)'; });
+    divider.addEventListener('mouseleave', () => { divider.style.background = '#2a2827'; });
+    divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const rect = box.getBoundingClientRect();
+      // 1:1 with the pointer; each pane refits itself via its ResizeObserver
+      const move = (ev) => {
+        const frac = isRow
+          ? (ev.clientX - rect.left) / Math.max(1, rect.width)
+          : (ev.clientY - rect.top) / Math.max(1, rect.height);
+        node.ratio = Math.max(0.12, Math.min(0.88, frac));
+        apply();
+      };
+      const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = ''; this.fitAllPanes(); };
+      window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+      document.body.style.cursor = isRow ? 'col-resize' : 'row-resize';
+    });
+    box.append(aEl, divider, bEl);
+    return box;
+  }
+
+  rebuildLayout() {
+    if (!this.layoutEl) return;
+    this.layoutEl.innerHTML = ''; // pane elements survive — they get re-appended
+    this.layoutEl.appendChild(this.buildLayoutDom(this.layout));
+    this.stylePanes();
+    setTimeout(() => this.fitAllPanes(), 30);
+  }
+
+  findLeaf(node, pid, parent) {
+    if (node.pane) return node.pane.pid === pid ? { node, parent } : null;
+    return this.findLeaf(node.a, pid, node) || this.findLeaf(node.b, pid, node);
+  }
+
+  findParentOf(node, target) {
+    if (node.pane) return null;
+    if (node.a === target || node.b === target) return node;
+    return this.findParentOf(node.a, target) || this.findParentOf(node.b, target);
+  }
+
+  firstLeaf(node) { return node.pane ? node : this.firstLeaf(node.a); }
+
+  // Split the active pane: 'row' = side by side (horizontal), 'col' = stacked.
+  splitPane(dir) {
+    if (!this.panes) return;
+    const cur = this.pane(); if (!cur) return;
+    const hit = this.findLeaf(this.layout, cur.pid, null); if (!hit) return;
+    const fresh = this.createPane();
+    const split = { dir, a: { pane: cur }, b: { pane: fresh }, ratio: 0.5 };
+    if (!hit.parent) this.layout = split;
+    else if (hit.parent.a === hit.node) hit.parent.a = split;
+    else hit.parent.b = split;
+    this.rebuildLayout();
+    // the new pane opens ANOTHER connection to the same session
+    this.connectPane(fresh, this.sess(cur.sessId) || this.sess(this.state.activeTab));
+    this.setActivePane(fresh.pid);
+  }
+
+  closeActivePane() {
+    if (!this.panes || this.panes.size <= 1) return;
+    const cur = this.pane(); if (!cur) return;
+    const hit = this.findLeaf(this.layout, cur.pid, null); if (!hit || !hit.parent) return;
+    const sibling = hit.parent.a === hit.node ? hit.parent.b : hit.parent.a;
+    const gp = this.findParentOf(this.layout, hit.parent);
+    if (!gp) this.layout = sibling;
+    else if (gp.a === hit.parent) gp.a = sibling;
+    else gp.b = sibling;
+    this.destroyPane(cur);
+    const first = this.firstLeaf(this.layout);
+    if (first) this.activePid = first.pane.pid;
+    this.rebuildLayout();
+    this.forceUpdate();
+  }
+
+  destroyPane(pane) {
+    if (window.__TAURI__ && pane.ptyId) { try { window.__TAURI__.invoke('pty_kill', { id: pane.ptyId }); } catch (e) {} }
+    try { if (pane.ro) pane.ro.disconnect(); } catch (e) {}
+    try { pane.term.dispose(); } catch (e) {}
+    try { pane.el.remove(); } catch (e) {}
+    this.panes.delete(pane.pid);
+  }
+
+  initXterm() {
+    if (this.panes || !this.xtermAvailable()) return;
+    const host = this.xtermHostRef.current;
+    if (!host) return;
+    const T = window.__TAURI__;
+    const invoke = T.invoke;
+    const listen = T.event && T.event.listen;
+    host.style.padding = '0';
+    this.panes = new Map();
+    this.layoutEl = document.createElement('div');
+    this.layoutEl.style.cssText = 'position:absolute;inset:0;display:flex';
+    host.appendChild(this.layoutEl);
+    const root = this.createPane();
+    this.activePid = root.pid;
+    this.layout = { pane: root };
+    this.rebuildLayout();
+    // PTY events are routed to the pane that owns the pty id
     if (listen) {
-      listen('pty://data', ev => { const p = ev.payload; if (p && p.id === this.xtermId) this.onPtyData(p.data); }).then(un => { this.xtermUnData = un; });
-      listen('pty://exit', ev => { const p = ev.payload; if (p && p.id === this.xtermId) { this._ptyDead = true; term.write('\r\n\x1b[33m[Disconnected — press Enter to reconnect]\x1b[0m\r\n'); } }).then(un => { this.xtermUnExit = un; });
-      // OS file drop → upload the file(s) to the remote via zmodem (rz)
+      listen('pty://data', ev => { const p = ev.payload; const pane = p && this.paneByPty(p.id); if (pane) this.onPtyData(pane, p.data); }).then(un => { this.xtermUnData = un; });
+      listen('pty://exit', ev => {
+        const p = ev.payload; const pane = p && this.paneByPty(p.id);
+        if (pane) { pane.ptyDead = true; try { pane.term.write('\r\n\x1b[33m[Disconnected — press Enter to reconnect]\x1b[0m\r\n'); } catch (e) {} }
+      }).then(un => { this.xtermUnExit = un; });
+      // OS file drop → upload the file(s) to the ACTIVE pane via zmodem (rz)
       listen('tauri://file-drop', async ev => {
         const paths = ev.payload; if (!Array.isArray(paths) || !paths.length || !this.xtermId) return;
         try {
@@ -1667,50 +1847,50 @@ class Component extends DCLogic {
         }
       }).then(un => { this.xtermUnDrop = un; });
     }
-    this.xtermResize = () => { try { if (this.xtermFit) this.xtermFit.fit(); } catch (e) {} };
+    this.xtermResize = () => this.fitAllPanes();
     window.addEventListener('resize', this.xtermResize);
     setTimeout(this.xtermResize, 60);
-    this.connectSession(this.sess(this.state.activeTab));
+    this.connectPane(root, this.sess(this.state.activeTab));
   }
 
-  // PTY output is fed to the zmodem Sentry first (so rz/sz transfers are caught);
-  // non-transfer bytes pass through to termWriteOut via the Sentry's to_terminal.
-  onPtyData(bytes) {
-    if (!this.xterm) return;
-    if (this.zsentry) {
-      try { this.zsentry.consume(new Uint8Array(bytes)); return; }
+  // PTY output is fed to the pane's zmodem Sentry first (so rz/sz transfers are
+  // caught); non-transfer bytes pass through to termWriteOut via to_terminal.
+  onPtyData(pane, bytes) {
+    if (!pane || !pane.term) return;
+    if (pane.zsentry) {
+      try { pane.zsentry.consume(new Uint8Array(bytes)); return; }
       catch (e) {
         // a broken zmodem stream must not silently turn into raw noise
-        if (!this._zerrOnce) { this._zerrOnce = true; try { this.xterm.write('\r\n\x1b[31m[zmodem stream error: ' + (e && (e.message || e)) + ']\x1b[0m\r\n'); } catch (er) {} }
+        if (!pane.zerrOnce) { pane.zerrOnce = true; try { pane.term.write('\r\n\x1b[31m[zmodem stream error: ' + (e && (e.message || e)) + ']\x1b[0m\r\n'); } catch (er) {} }
       }
-    } else if (!this._zwarned) {
+    } else if (!pane.zwarned) {
       // No sentry (library failed to load) — say so when a transfer starts,
       // rather than printing the raw handshake and hanging forever.
       const u8 = new Uint8Array(bytes);
       for (let i = 0; i + 3 < u8.length; i++) {
         if (u8[i] === 42 && u8[i + 1] === 42 && u8[i + 2] === 24 && u8[i + 3] === 66) { // "**\x18B"
-          this._zwarned = true;
-          this.termWriteOut(bytes);
-          try { this.xterm.write('\r\n\x1b[31m[zmodem support not loaded - rz/sz unavailable]\x1b[0m\r\n'); } catch (er) {}
+          pane.zwarned = true;
+          this.termWriteOut(pane, bytes);
+          try { pane.term.write('\r\n\x1b[31m[zmodem support not loaded - rz/sz unavailable]\x1b[0m\r\n'); } catch (er) {}
           return;
         }
       }
     }
-    this.termWriteOut(bytes);
+    this.termWriteOut(pane, bytes);
   }
 
   // Actual terminal write: rolling capture for the AI, ssh password auto-answer,
   // and optional IPv4 quick-color.
-  termWriteOut(octets) {
-    const term = this.xterm; if (!term) return;
+  termWriteOut(pane, octets) {
+    const term = pane && pane.term; if (!term) return;
     const u8 = octets instanceof Uint8Array ? octets : new Uint8Array(octets);
     let text = '';
     try { text = new TextDecoder().decode(u8); } catch (e) {}
-    this._scroll = ((this._scroll || '') + text).slice(-8000);
-    if (!this._pwSent && this._pendPass && /(assword|passphrase|verification code)\s*[:：]?\s*$/i.test(text)) {
-      this._pwSent = true;
-      const pw = this._pendPass;
-      setTimeout(() => this.writeToPty(pw + '\n'), 120);
+    pane.scroll = ((pane.scroll || '') + text).slice(-8000);
+    if (!pane.pwSent && pane.pendPass && /(assword|passphrase|verification code)\s*[:：]?\s*$/i.test(text)) {
+      pane.pwSent = true;
+      const pw = pane.pendPass;
+      setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: pw + '\n' }).catch(() => {}); }, 120);
     }
     // Client-side quick color — ONLY on chunks that contain no escape sequence at
     // all. Anything with an ESC is a program driving the screen (vim, less, any
@@ -1723,21 +1903,21 @@ class Component extends DCLogic {
     else term.write(u8);
   }
 
-  writeBytesToPty(octets) {
-    if (this.xtermId && window.__TAURI__) {
-      window.__TAURI__.invoke('pty_write_bytes', { id: this.xtermId, data: Array.from(octets) }).catch(() => {});
+  writeBytesToPty(pane, octets) {
+    if (pane && pane.ptyId && window.__TAURI__) {
+      window.__TAURI__.invoke('pty_write_bytes', { id: pane.ptyId, data: Array.from(octets) }).catch(() => {});
     }
   }
 
-  // A zmodem transfer was detected in the stream. `receive` = remote ran sz (we
-  // save the file); `send` = remote ran rz (we upload local files).
+  // A zmodem transfer was detected in a pane's stream. `receive` = remote ran sz
+  // (we save the file); `send` = remote ran rz (we upload local files).
   //
   // Both directions use Tauri's NATIVE dialogs, not <input type=file> / a Blob
   // download: the transfer is detected from PTY data, i.e. with no user gesture,
   // and the webview blocks a file picker or download opened without one — which
   // is why rz/sz previously just hung at "waiting to receive".
-  onZmodem(detection) {
-    const term = this.xterm;
+  onZmodem(pane, detection) {
+    const term = pane.term;
     const T = window.__TAURI__;
     const note = (s) => { try { term.write('\r\n\x1b[36m' + s + '\x1b[0m\r\n'); } catch (e) {} };
     let zsession;
@@ -1825,20 +2005,22 @@ class Component extends DCLogic {
     );
   }
 
+  // Write to the ACTIVE pane's PTY (AI Operator, quick commands, sender…).
   writeToPty(data) {
-    if (this.xterm && this.xtermId && window.__TAURI__) {
-      window.__TAURI__.invoke('pty_write', { id: this.xtermId, data }).catch(() => {});
+    const p = this.pane();
+    if (p && p.ptyId && window.__TAURI__) {
+      window.__TAURI__.invoke('pty_write', { id: p.ptyId, data }).catch(() => {});
       return true;
     }
     return false;
   }
 
-  // Track what the user literally types into the real terminal so finished
-  // command lines land in the per-session Command History panel. Escape
-  // sequences (arrow keys), ^C/^U and backspace are handled; text inserted by
-  // the shell itself (tab completion, history recall) is not captured.
-  captureTyped(d) {
-    if (this._lineBuf == null) this._lineBuf = '';
+  // Track what the user literally types into a pane so finished command lines
+  // land in the per-session Command History panel. Escape sequences (arrow
+  // keys), ^C/^U and backspace are handled; text inserted by the shell itself
+  // (tab completion, history recall) is not captured.
+  captureTyped(pane, d) {
+    if (pane.lineBuf == null) pane.lineBuf = '';
     for (let i = 0; i < d.length; i++) {
       const ch = d[i];
       if (ch === '\x1b') { // skip one escape sequence
@@ -1847,36 +2029,35 @@ class Component extends DCLogic {
         continue;
       }
       if (ch === '\r' || ch === '\n') {
-        const cmd = this._lineBuf.trim();
-        this._lineBuf = '';
-        if (cmd) this.recordCmd(this.xtermSessId || this.state.activeTab, cmd);
+        const cmd = pane.lineBuf.trim();
+        pane.lineBuf = '';
+        if (cmd) this.recordCmd(pane.sessId || this.state.activeTab, cmd);
       }
-      else if (ch === '\x7f' || ch === '\b') this._lineBuf = this._lineBuf.slice(0, -1);
-      else if (ch === '\x03' || ch === '\x15') this._lineBuf = ''; // ^C / ^U
-      else if (ch >= ' ') this._lineBuf += ch;
+      else if (ch === '\x7f' || ch === '\b') pane.lineBuf = pane.lineBuf.slice(0, -1);
+      else if (ch === '\x03' || ch === '\x15') pane.lineBuf = ''; // ^C / ^U
+      else if (ch >= ' ') pane.lineBuf += ch;
     }
   }
 
-  terminalText() { return this._scroll || ''; }
+  terminalText() { const p = this.pane(); return (p && p.scroll) || ''; }
 
-  // Draw the timestamp gutter, aligned to xterm's rendered rows. Each timestamp
-  // is carried by an xterm marker pinned to its buffer line, so a line keeps the
-  // time it was written no matter how the view scrolls, resizes or reflows.
-  renderGutter() {
-    const term = this.xterm, gutter = this.xtermGutter, host = this.xtermHostRef.current;
-    if (!term || !gutter || !host) return;
+  // Draw the timestamp gutter for one pane, aligned to its xterm rows.
+  renderGutter(pane) {
+    if (!pane) pane = this.pane();
+    const term = pane && pane.term, gutter = pane && pane.gutter;
+    if (!term || !gutter) return;
     const buf = term.buffer.active;
     if (!this.state.tsMargin || (buf && buf.type !== 'normal')) { if (gutter.innerHTML) gutter.innerHTML = ''; return; }
     try {
       const rowsEl = term.element && term.element.querySelector('.xterm-rows');
       if (!rowsEl || !rowsEl.children.length) return;
-      const rrect = rowsEl.getBoundingClientRect(), hrect = host.getBoundingClientRect();
+      const rrect = rowsEl.getBoundingClientRect(), hrect = pane.el.getBoundingClientRect();
       const offY = rrect.top - hrect.top;
       const viewportY = buf.viewportY;
       const kids = rowsEl.children;
       // marker line → timestamp, for the visible window only
       const map = {};
-      const marks = this._marks || [];
+      const marks = pane.marks || [];
       const last = viewportY + kids.length;
       for (let j = 0; j < marks.length; j++) {
         const m = marks[j];
@@ -1899,7 +2080,7 @@ class Component extends DCLogic {
     } catch (e) {}
   }
 
-  // Find in the real terminal via the xterm search addon; also refreshes the
+  // Find in the ACTIVE pane via the xterm search addon; also refreshes the
   // WindTerm-style match locator strip on the right edge and the n/m counter.
   xtermFind(forward) {
     if (!this.xtermSearch || !this.xterm) return false;
@@ -1917,24 +2098,24 @@ class Component extends DCLogic {
     return true;
   }
 
-  // right-edge locator strip: one tick per buffer line containing a match
+  // right-edge locator strip on the active pane: one tick per matching line
   ensureXtermTicks() {
-    const host = this.xtermHostRef.current;
-    if (!host || this.xtermTicksEl) return;
+    const pane = this.pane();
+    if (!pane || pane.ticks) return;
     const el = document.createElement('div');
     el.style.cssText = 'position:absolute;right:0;top:0;bottom:0;width:11px;display:none;background:rgba(0,0,0,.28);border-left:1px solid #33312f;z-index:6;cursor:pointer';
     el.addEventListener('click', (ev) => {
-      const term = this.xterm; if (!term) return;
+      const term = pane.term; if (!term) return;
       const frac = ev.offsetY / Math.max(1, el.clientHeight);
       const buf = term.buffer.active;
       const line = Math.max(0, Math.min(buf.length - 1, Math.round(frac * buf.length)));
       try { term.scrollToLine(Math.max(0, line - Math.floor(term.rows / 2))); } catch (e) {}
     });
-    host.appendChild(el);
-    this.xtermTicksEl = el;
+    pane.el.appendChild(el);
+    pane.ticks = el;
   }
 
-  // scan the whole xterm scrollback for Find matches (uses the Find options)
+  // scan the active pane's whole scrollback for Find matches
   xtermScanMatches() {
     const term = this.xterm;
     const q = (this.state.logQuery || '').trim();
@@ -1959,8 +2140,10 @@ class Component extends DCLogic {
   }
 
   renderXtermTicks() {
+    const pane = this.pane();
+    if (!pane) return;
     this.ensureXtermTicks();
-    const el = this.xtermTicksEl, term = this.xterm;
+    const el = pane.ticks, term = pane.term;
     if (!el || !term) return;
     const q = (this.state.logQuery || '').trim();
     if (!this.state.searchOpen || !q || !this._xtermHits || !this._xtermHits.length) { el.style.display = 'none'; return; }
@@ -1973,27 +2156,29 @@ class Component extends DCLogic {
     el.style.display = 'block';
   }
 
-  // Keep the xterm element attached to the current host (survives view switches),
-  // and reconnect the PTY when the active tab changes to a different session.
+  // Keep the pane layout attached to the current host (survives view switches),
+  // and reconnect the ACTIVE pane when the active tab changes session.
   syncXterm() {
     if (!this.xtermAvailable()) return;
     const host = this.xtermHostRef.current;
     if (!host) return;
-    if (!this.xterm) { this.initXterm(); return; }
-    if (this.xterm.element && this.xterm.element.parentNode !== host) {
-      host.appendChild(this.xterm.element);
-      this.xtermResize && this.xtermResize();
+    if (!this.panes) { this.initXterm(); return; }
+    if (this.layoutEl && this.layoutEl.parentNode !== host) {
+      host.style.padding = '0';
+      host.appendChild(this.layoutEl);
+      this.fitAllPanes();
     }
     // refit when the terminal area height changes (a bottom panel opened/closed,
-    // window resized) so the xterm doesn't overflow and cover the panels below
+    // window resized) so the panes don't overflow and cover the panels below
     if (host.clientHeight && host.clientHeight !== this._lastFitH) {
       this._lastFitH = host.clientHeight;
-      this.xtermResize && this.xtermResize();
+      this.fitAllPanes();
     }
     const active = this.sess(this.state.activeTab);
     const activeId = active ? active.id : null;
-    if (activeId !== this.xtermSessId) this.connectSession(active);
-    this.renderGutter();
+    const pane = this.pane();
+    if (pane && activeId !== pane.sessId) this.connectPane(pane, active);
+    if (pane) this.renderGutter(pane);
   }
 
   cleanupXterm() {
@@ -2001,9 +2186,8 @@ class Component extends DCLogic {
     if (this.xtermUnExit) { try { this.xtermUnExit(); } catch (e) {} }
     if (this.xtermUnDrop) { try { this.xtermUnDrop(); } catch (e) {} }
     if (this.xtermResize) window.removeEventListener('resize', this.xtermResize);
-    if (window.__TAURI__ && this.xtermId) { try { window.__TAURI__.invoke('pty_kill', { id: this.xtermId }); } catch (e) {} }
-    if (this.xterm) { try { this.xterm.dispose(); } catch (e) {} this.xterm = null; }
-    this.xtermTicksEl = null;
+    if (this.panes) { for (const p of Array.from(this.panes.values())) this.destroyPane(p); this.panes = null; }
+    this.layoutEl = null;
   }
 
   applyBodyTheme() {
@@ -2556,6 +2740,9 @@ class Component extends DCLogic {
       { label: 'Duplicate Session', fn: () => this.duplicateSession(this.state.activeTab) },
       { label: 'Close View', hint: 'Ctrl+Shift+W', fn: () => this.closeTab(this.state.activeTab) },
       { label: 'Reopen Closed View', hint: 'Ctrl+Shift+T', fn: () => this.reopenClosed() },
+      { label: 'Split Terminal Horizontally', fn: () => this.splitPane('row') },
+      { label: 'Split Terminal Vertically', fn: () => this.splitPane('col') },
+      { label: 'Close Terminal Pane', fn: () => this.closeActivePane() },
       { label: 'Next Tab', hint: 'Ctrl+Tab', fn: () => this.stepTab(1) },
       { label: 'Previous Tab', fn: () => this.stepTab(-1) },
       { label: 'AI Mode: Auto', fn: () => this.setState({ aiMode: 'auto' }) },
@@ -3728,6 +3915,10 @@ class Component extends DCLogic {
           it('Goto Previous Command', () => this.gotoCommand(-1), 'Ctrl+Shift+Left'),
           it('Goto Next Command', () => this.gotoCommand(1), 'Ctrl+Shift+Right'),
           div,
+          it('Split Horizontally', () => this.splitPane('row')),
+          it('Split Vertically', () => this.splitPane('col')),
+          it('Close Pane', this.paneCount() > 1 ? () => this.closeActivePane() : null),
+          div,
           it('Session Triggers…', null),
           it('Transfer Binary', null, '', [si('Send (sz)', () => this.execLocal('rz')), si('Receive (rz)', () => this.execLocal('rz')), si('Zmodem…', null)]),
           it('Log', null, '', [si(st.recActive ? 'Stop Recording' : 'Start Recording', () => this.toggleRec()), si('Open Log Folder', () => this.setState({ recPopOpen: true })), si('Export Log', () => this.exportLog())]),
@@ -3789,6 +3980,10 @@ class Component extends DCLogic {
       lines: renderedLines,
       termRef: this.termRef, chatRef: this.chatRef, termInputRef: this.termInputRef,
       xtermOn: this.xtermAvailable(), xtermHostRef: this.xtermHostRef,
+      // split panes
+      splitH: () => this.splitPane('row'),
+      splitV: () => this.splitPane('col'),
+      closePaneBtn: () => this.closeActivePane(),
       focusTerm: () => { if (this.termInputRef.current) this.termInputRef.current.focus(); },
       promptUser: active ? 'ops@' + active.host : 'ops@—',
       termDraft: st.termDraft,
