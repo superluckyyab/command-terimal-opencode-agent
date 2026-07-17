@@ -426,7 +426,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
       <div onMouseDown="{{ aiResizeStart }}" title="Drag to resize" style="position:absolute;top:0;left:-3px;bottom:0;width:6px;cursor:col-resize;z-index:5" style-hover="background:color-mix(in srgb, var(--color-accent) 30%, transparent)"></div>
       <div style="padding:10px 14px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-neutral-700);flex:none">
         <span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
-        Attached to <span class="tag tag-accent" style="font-family:ui-monospace,Menlo,monospace;color:var(--color-text);white-space:nowrap">{{ attachedName }}</span>
+        <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ attachedName }}</span>
         <span style="margin-left:auto;display:flex;gap:3px;align-items:center">
           <span onClick="{{ clearChat }}" title="新建会话 — 清除当前终端的 AI 对话" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2.5 3.5h11v7.5h-6l-3 2.5v-2.5h-2z"></path><path d="M8 5.5v3M6.5 7h3"></path></svg>
@@ -1429,6 +1429,10 @@ class Component extends DCLogic {
     args.push('-o', 'UserKnownHostsFile=' + devNull);
     args.push('-o', 'GlobalKnownHostsFile=' + devNull);
     args.push('-o', 'LogLevel=ERROR'); // silences the "Permanently added…" notice
+    // If the peer dies silently, make ssh notice and exit instead of hanging —
+    // that's what surfaces the "[disconnected — press Enter]" prompt.
+    args.push('-o', 'ServerAliveInterval=30');
+    args.push('-o', 'ServerAliveCountMax=3');
     args.push((sess.user ? sess.user + '@' : '') + sess.addr);
     return { program: 'ssh', args };
   }
@@ -1437,6 +1441,10 @@ class Component extends DCLogic {
     if (!this.xterm || !window.__TAURI__) return;
     const invoke = window.__TAURI__.invoke;
     const term = this.xterm;
+    // Reconnecting the SAME session (e.g. after an ssh timeout) must keep what
+    // is already on screen — scroll up and the earlier output is still there.
+    // Only switching to a different session starts with a clean terminal.
+    const sameSession = !!(sess && this.xtermSessId && this.xtermSessId === sess.id);
     if (this.xtermId) invoke('pty_kill', { id: this.xtermId }).catch(() => {});
     const spec = this.sshSpecFor(sess);
     const id = 'pty:' + (sess ? sess.id : 'shell') + ':' + (++this.seq);
@@ -1445,12 +1453,17 @@ class Component extends DCLogic {
     this._pendPass = (sess && sess.pass) ? sess.pass : '';
     this._pwSent = false;
     this._ptyDead = false;
-    this._scroll = '';
     this._lineBuf = '';
-    // fresh session → line numbering and timestamps restart at 1
-    this._totalLines = 0;
-    this._lineTs = { 1: new Date().toTimeString().slice(0, 8) };
-    try { term.reset(); } catch (e) {}
+    if (!sameSession) {
+      // different session → clean slate: clear screen, restart timestamps
+      this._scroll = '';
+      this._totalLines = 0;
+      this._lineTs = { 1: new Date().toTimeString().slice(0, 8) };
+      try { term.reset(); } catch (e) {}
+    } else {
+      // keep the scrollback, timestamps and line counter running
+      term.write('\r\n');
+    }
     if (spec) term.write('Connecting to ' + (sess.user ? sess.user + '@' : '') + sess.addr + (sess.port && String(sess.port) !== '22' ? ':' + sess.port : '') + ' …\r\n');
     const payload = { id, cols: term.cols || 80, rows: term.rows || 24 };
     if (spec) { payload.program = spec.program; payload.args = spec.args; }
