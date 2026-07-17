@@ -16,6 +16,52 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:color-mix(in srgb, var(--color-text) 22%, transparent);border-radius:5px}
 ::-webkit-scrollbar-track{background:transparent}
+
+/* ═══ fluid-interface polish (Apple HIG / Designing Fluid Interfaces) ═══ */
+/* smooth dark↔light theme change — no abrupt brightness jump */
+body{transition:background .25s ease,color .25s ease}
+
+/* 1 · response: feedback on press, instantly, on the way DOWN */
+.btn{transition:transform .1s ease-out,background .15s ease,border-color .15s ease,box-shadow .15s ease}
+.btn:active{transform:scale(.96)}
+span[title]{transition:transform .1s ease-out,background .15s ease,color .15s ease}
+span[title]:active{transform:scale(.92)}
+.input{transition:border-color .15s ease,box-shadow .15s ease}
+.input:focus{box-shadow:0 0 0 3px color-mix(in srgb, var(--color-accent) 20%, transparent)}
+
+/* 12 · materials: dialogs materialize (scale + blur + fade together), scrim dims to focus */
+.dialog-backdrop{animation:wl-fade .18s ease-out;background:color-mix(in srgb, var(--color-neutral-900) 42%, transparent) !important;backdrop-filter:blur(5px) saturate(120%)}
+.dialog{animation:wl-pop .24s cubic-bezier(.2,.9,.27,1);background:color-mix(in srgb, var(--color-bg) 86%, transparent) !important;backdrop-filter:blur(24px) saturate(150%);box-shadow:0 24px 64px rgba(0,0,0,.35),0 0 0 .5px color-mix(in srgb, var(--color-text) 12%, transparent)}
+@keyframes wl-fade{from{opacity:0}}
+@keyframes wl-pop{from{opacity:0;transform:scale(.965) translateY(6px);filter:blur(6px)}}
+
+/* 7 · popovers & menus scale in FROM their trigger (anchored origin) */
+.pop{animation:wl-pop-in .15s cubic-bezier(.2,.9,.27,1);transform-origin:top left;background:color-mix(in srgb, var(--color-bg) 90%, transparent) !important;backdrop-filter:blur(18px) saturate(150%);box-shadow:0 12px 32px rgba(0,0,0,.26),0 0 0 .5px color-mix(in srgb, var(--color-text) 12%, transparent) !important}
+.pop-tr{transform-origin:top right}
+.pop-tc{transform-origin:top center}
+.pop-br{transform-origin:bottom right}
+.pop-bl{transform-origin:bottom left}
+@keyframes wl-pop-in{from{opacity:0;transform:scale(.96)}}
+
+/* panel collapse/expand animates; while DRAGGING the divider stay 1:1 with the pointer */
+.wb-grid{transition:grid-template-columns .28s cubic-bezier(.25,.8,.25,1)}
+body.wl-dragging .wb-grid{transition:none}
+
+/* AI chat messages rise in softly */
+.chat-scroll>div{animation:wl-rise .2s ease-out}
+@keyframes wl-rise{from{opacity:0;transform:translateY(5px)}}
+
+/* 15 · typography: large text gets negative tracking */
+.dialog-title,h2{letter-spacing:-.02em}
+
+/* 14 · accessibility: gentle equivalents, not missing feedback */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001s !important;transition-duration:.001s !important}
+}
+@media (prefers-reduced-transparency: reduce){
+  .dialog,.pop{backdrop-filter:none !important;background:var(--color-bg) !important}
+  .dialog-backdrop{backdrop-filter:none !important}
+}
 </style>
 </helmet>
 
@@ -30,7 +76,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
       <div style="position:relative">
         <div onClick="{{ mn.toggle }}" style="padding:9px 10px;font-size:13px;cursor:pointer;user-select:none;background:{{ mn.bg }}" style-hover="background:var(--color-neutral-200)">{{ mn.label }}</div>
         <sc-if value="{{ mn.open }}" hint-placeholder-val="{{ false }}">
-          <div style="position:absolute;top:100%;left:0;z-index:60;min-width:220px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+          <div class="pop" style="position:absolute;top:100%;left:0;z-index:60;min-width:220px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
             <sc-for list="{{ mn.items }}" as="mi" hint-placeholder-count="3">
               <sc-if value="{{ mi.divider }}" hint-placeholder-val="{{ false }}">
                 <div style="height:1px;background:var(--color-divider);margin:4px 0"></div>
@@ -41,7 +87,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
                 <span style="font-size:10.5px;color:var(--color-neutral-500);font-family:ui-monospace,Menlo,monospace">{{ mi.hint }}</span>
                 <sc-if value="{{ mi.hasSub }}" hint-placeholder-val="{{ false }}"><span style="color:var(--color-neutral-500);font-size:10px">▸</span></sc-if>
                 <sc-if value="{{ mi.subOpen }}" hint-placeholder-val="{{ false }}">
-                  <div style="position:absolute;top:-5px;left:100%;z-index:61;min-width:190px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+                  <div class="pop" style="position:absolute;top:-5px;left:100%;z-index:61;min-width:190px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
                     <sc-for list="{{ mi.subItems }}" as="si" hint-placeholder-count="3">
                       <sc-if value="{{ si.divider }}" hint-placeholder-val="{{ false }}"><div style="height:1px;background:var(--color-divider);margin:4px 0"></div></sc-if>
                       <sc-if value="{{ si.isItem }}" hint-placeholder-val="{{ true }}">
@@ -74,7 +120,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
 
   <!-- ═══ WORKBENCH ═══ -->
   <sc-if value="{{ viewWorkbench }}" hint-placeholder-val="{{ true }}">
-  <div style="display:grid;grid-template-columns:{{ treeW }} 1fr {{ aiW }};flex:1;min-height:0">
+  <div class="wb-grid" style="display:grid;grid-template-columns:{{ treeW }} 1fr {{ aiW }};flex:1;min-height:0">
 
     <!-- session tree -->
     <sc-if value="{{ treeOpen }}" hint-placeholder-val="{{ true }}">
@@ -162,7 +208,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5h10M3 8h10M3 11.5h10"></path></svg>
           </span>
           <sc-if value="{{ tabListOpen }}" hint-placeholder-val="{{ false }}">
-            <div style="position:absolute;top:100%;right:0;z-index:66;width:250px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);display:flex;flex-direction:column">
+            <div class="pop pop-tr" style="position:absolute;top:100%;right:0;z-index:66;width:250px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);display:flex;flex-direction:column">
               <div style="padding:8px"><input class="input" type="text" placeholder="Filter" value="{{ tabListQuery }}" onChange="{{ onTabListQuery }}" style="height:26px;font-size:12px"></div>
               <div style="max-height:280px;overflow-y:auto;padding-bottom:4px">
                 <sc-for list="{{ tabListItems }}" as="tl" hint-placeholder-count="5">
@@ -192,7 +238,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
             </span>
             <span onClick="{{ toggleRecPop }}" title="Log directory" style="display:grid;place-items:center;width:18px;height:26px;border:1px solid {{ recBorder }};border-left:none;border-radius:0 var(--radius-md) var(--radius-md) 0;cursor:pointer;color:var(--color-neutral-600);font-size:9px" style-hover="background:var(--color-neutral-200)">▾</span>
             <sc-if value="{{ recPopOpen }}" hint-placeholder-val="{{ false }}">
-              <div style="position:absolute;top:100%;right:0;z-index:60;width:290px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:12px;display:flex;flex-direction:column;gap:8px">
+              <div class="pop pop-tr" style="position:absolute;top:100%;right:0;z-index:60;width:290px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:12px;display:flex;flex-direction:column;gap:8px">
                 <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600)">Log directory</div>
                 <div style="display:flex;gap:6px">
                   <input class="input" type="text" value="{{ recDir }}" onChange="{{ onRecDir }}" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;flex:1">
@@ -293,7 +339,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         </sc-if>
         <!-- selection action bar -->
         <sc-if value="{{ selBarOn }}" hint-placeholder-val="{{ false }}">
-          <div style="position:fixed;left:{{ selBarX }};top:{{ selBarY }};z-index:85;display:flex;align-items:center;gap:2px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);border-radius:var(--radius-md);padding:3px">
+          <div class="pop" style="position:fixed;left:{{ selBarX }};top:{{ selBarY }};z-index:85;display:flex;align-items:center;gap:2px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);border-radius:var(--radius-md);padding:3px">
             <span onClick="{{ selBarCopy }}" style="padding:4px 10px;font-size:12px;cursor:pointer;border-radius:var(--radius-md)" style-hover="background:var(--color-neutral-200)">Copy</span>
             <span style="width:1px;height:14px;background:var(--color-divider)"></span>
             <span onClick="{{ selBarAsk }}" style="padding:4px 10px;font-size:12px;cursor:pointer;color:var(--color-accent-2-700);border-radius:var(--radius-md)" style-hover="background:var(--color-accent-2-100)">Ask AI</span>
@@ -305,7 +351,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         </sc-if>
         <!-- hover smart popup (ip / url / timestamp / hex) -->
         <sc-if value="{{ hoverOn }}" hint-placeholder-val="{{ false }}">
-          <div onMouseEnter="{{ hoverKeep }}" onMouseLeave="{{ hoverClose }}" style="position:fixed;left:{{ hoverX }};top:{{ hoverY }};z-index:85;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0;min-width:200px">
+          <div class="pop" onMouseEnter="{{ hoverKeep }}" onMouseLeave="{{ hoverClose }}" style="position:fixed;left:{{ hoverX }};top:{{ hoverY }};z-index:85;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0;min-width:200px">
             <div style="padding:4px 12px 6px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--color-neutral-500);border-bottom:1px solid var(--color-divider);max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ hoverToken }}</div>
             <sc-for list="{{ hoverItems }}" as="hi" hint-placeholder-count="2">
               <div onClick="{{ hi.act }}" style="padding:6px 12px;font-size:12.5px;cursor:{{ hi.cur }};display:flex;gap:12px;align-items:baseline;white-space:nowrap" style-hover="background:var(--color-accent-100)">
@@ -387,7 +433,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
           <span style="position:relative;display:flex;align-items:center">
             <span onClick="{{ toggleFindHist }}" title="Search history" style="display:grid;place-items:center;width:20px;height:24px;border-radius:var(--radius-md);cursor:pointer;color:{{ findHistIconC }};font-size:9px" style-hover="background:var(--color-neutral-200)">▾</span>
             <sc-if value="{{ findHistOpen }}" hint-placeholder-val="{{ false }}">
-              <div style="position:absolute;bottom:100%;right:0;z-index:66;width:220px;max-height:200px;overflow-y:auto;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+              <div class="pop pop-br" style="position:absolute;bottom:100%;right:0;z-index:66;width:220px;max-height:200px;overflow-y:auto;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
                 <sc-if value="{{ findHistEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:7px 12px;font-size:12px;color:var(--color-neutral-500)">No search history</div></sc-if>
                 <sc-for list="{{ findHist }}" as="fh" hint-placeholder-count="3">
                   <div onClick="{{ fh.use }}" style="padding:6px 12px;font-size:12px;cursor:pointer;font-family:ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:var(--color-accent-100)">{{ fh.q }}</div>
@@ -446,7 +492,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
       </div>
 
       <!-- transcript -->
-      <div ref="{{ chatRef }}" style="flex:1;padding:14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
+      <div class="chat-scroll" ref="{{ chatRef }}" style="flex:1;padding:14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
         <sc-for list="{{ chat }}" as="m" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column">
             <sc-if value="{{ m.user }}" hint-placeholder-val="{{ false }}">
@@ -505,7 +551,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
         </sc-if>
         <!-- slash suggestions -->
         <sc-if value="{{ slashOn }}" hint-placeholder-val="{{ false }}">
-          <div style="display:flex;flex-direction:column;background:var(--color-bg);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);overflow:hidden">
+          <div class="pop pop-bl" style="display:flex;flex-direction:column;background:var(--color-bg);border:1px solid var(--color-divider);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);overflow:hidden">
             <sc-for list="{{ slashItems }}" as="sl" hint-placeholder-count="4">
               <div onClick="{{ sl.pick }}" style="display:flex;gap:10px;align-items:baseline;padding:6px 10px;cursor:pointer;font-size:12.5px" style-hover="background:var(--color-accent-100)">
                 <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-accent-700)">{{ sl.cmd }}</span>
@@ -646,7 +692,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
   <!-- ═══ TERMINAL CONTEXT MENU (WindTerm style) ═══ -->
   <sc-if value="{{ tmOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeTm }}" onContextMenu="{{ closeTm }}" style="position:fixed;inset:0;z-index:84">
-      <div onClick="{{ stop }}" style="position:absolute;left:{{ tmX }};top:{{ tmY }};min-width:250px;max-height:70vh;overflow-y:auto;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0;font-size:12.5px">
+      <div class="pop" onClick="{{ stop }}" style="position:absolute;left:{{ tmX }};top:{{ tmY }};min-width:250px;max-height:70vh;overflow-y:auto;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0;font-size:12.5px">
         <sc-for list="{{ tmItems }}" as="ti" hint-placeholder-count="10">
           <sc-if value="{{ ti.divider }}" hint-placeholder-val="{{ false }}"><div style="height:1px;background:var(--color-divider);margin:4px 0"></div></sc-if>
           <sc-if value="{{ ti.swatches }}" hint-placeholder-val="{{ false }}">
@@ -663,7 +709,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
               <span style="font-size:10.5px;color:var(--color-neutral-500);font-family:ui-monospace,Menlo,monospace">{{ ti.hint }}</span>
               <sc-if value="{{ ti.hasSub }}" hint-placeholder-val="{{ false }}"><span style="color:var(--color-neutral-500);font-size:10px">▸</span></sc-if>
               <sc-if value="{{ ti.subOpen }}" hint-placeholder-val="{{ false }}">
-                <div style="position:absolute;top:-5px;left:100%;z-index:86;min-width:180px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+                <div class="pop" style="position:absolute;top:-5px;left:100%;z-index:86;min-width:180px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
                   <sc-for list="{{ ti.subItems }}" as="si" hint-placeholder-count="3">
                     <div onClick="{{ si.act }}" style="padding:6px 14px;cursor:{{ si.cursor }};color:{{ si.c }};white-space:nowrap" style-hover="background:var(--color-accent-100)">{{ si.label }}</div>
                   </sc-for>
@@ -679,7 +725,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
   <!-- ═══ COMMAND PALETTE ═══ -->
   <sc-if value="{{ paletteOpen }}" hint-placeholder-val="{{ false }}">
     <div style="position:fixed;inset:0;z-index:90;background:color-mix(in srgb, var(--color-neutral-900) 30%, transparent)" onClick="{{ closePalette }}">
-      <div onClick="{{ stop }}" style="width:520px;max-width:90vw;margin:70px auto 0;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-lg);border-radius:var(--radius-md);overflow:hidden">
+      <div class="pop pop-tc" onClick="{{ stop }}" style="width:520px;max-width:90vw;margin:70px auto 0;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-lg);border-radius:var(--radius-md);overflow:hidden">
         <input ref="{{ paletteRef }}" class="input" type="text" placeholder="Type to search every action… (↑↓ select · Enter run)" value="{{ paletteQuery }}" onChange="{{ onPaletteQuery }}" onKeyDown="{{ onPaletteKey }}" style="border:none;border-bottom:1px solid var(--color-divider);border-radius:0;height:42px;font-size:14px">
         <div style="max-height:320px;overflow-y:auto;padding:4px 0">
           <sc-if value="{{ paletteEmpty }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 16px;font-size:13px;color:var(--color-neutral-500)">No matching actions</div></sc-if>
@@ -807,7 +853,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
   <!-- ═══ QUICK-COMMAND CONTEXT MENU + EDITOR ═══ -->
   <sc-if value="{{ qctxOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeQctx }}" onContextMenu="{{ closeQctx }}" style="position:fixed;inset:0;z-index:80">
-      <div onClick="{{ stop }}" style="position:absolute;left:{{ qctxX }};top:{{ qctxY }};min-width:170px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+      <div class="pop" onClick="{{ stop }}" style="position:absolute;left:{{ qctxX }};top:{{ qctxY }};min-width:170px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
         <div onClick="{{ qctxRun }}" style="padding:7px 14px;font-size:12.5px;cursor:pointer" style-hover="background:var(--color-accent-100)">Run in terminal</div>
         <div onClick="{{ qctxEdit }}" style="padding:7px 14px;font-size:12.5px;cursor:pointer" style-hover="background:var(--color-accent-100)">Edit…</div>
         <div style="height:1px;background:var(--color-divider);margin:4px 0"></div>
@@ -895,7 +941,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
   <!-- ═══ TAB CONTEXT MENU (WindTerm view menu) ═══ -->
   <sc-if value="{{ tctxOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeTctx }}" onContextMenu="{{ closeTctx }}" style="position:fixed;inset:0;z-index:80">
-      <div onClick="{{ stop }}" style="position:absolute;left:{{ tctxX }};top:{{ tctxY }};min-width:230px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0;font-size:12.5px">
+      <div class="pop" onClick="{{ stop }}" style="position:absolute;left:{{ tctxX }};top:{{ tctxY }};min-width:230px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0;font-size:12.5px">
         <sc-for list="{{ tctxItems }}" as="ti" hint-placeholder-count="8">
           <sc-if value="{{ ti.divider }}" hint-placeholder-val="{{ false }}"><div style="height:1px;background:var(--color-divider);margin:4px 0"></div></sc-if>
           <sc-if value="{{ ti.isItem }}" hint-placeholder-val="{{ true }}">
@@ -912,7 +958,7 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
   <!-- ═══ SESSION CONTEXT MENU (pin / delete) ═══ -->
   <sc-if value="{{ ctxOpen }}" hint-placeholder-val="{{ false }}">
     <div onClick="{{ closeCtx }}" onContextMenu="{{ closeCtx }}" style="position:fixed;inset:0;z-index:80">
-      <div onClick="{{ stop }}" style="position:absolute;left:{{ ctxX }};top:{{ ctxY }};min-width:180px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+      <div class="pop" onClick="{{ stop }}" style="position:absolute;left:{{ ctxX }};top:{{ ctxY }};min-width:180px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
         <div onClick="{{ ctxOpenSession }}" style="padding:7px 14px;font-size:12.5px;cursor:pointer" style-hover="background:var(--color-accent-100)">Open</div>
         <div onClick="{{ ctxPin }}" style="padding:7px 14px;font-size:12.5px;cursor:pointer;display:flex;align-items:center;gap:8px" style-hover="background:var(--color-accent-100)">{{ ctxPinLabel }}</div>
         <div onClick="{{ ctxRename }}" style="padding:7px 14px;font-size:12.5px;cursor:pointer" style-hover="background:var(--color-accent-100)">Set alias…</div>
@@ -2483,9 +2529,11 @@ class Component extends DCLogic {
       if (which === 'tree') this.setState({ treeWpx: Math.max(160, Math.min(480, startW + dx)) });
       else this.setState({ aiWpx: Math.max(240, Math.min(560, startW - dx)) });
     };
-    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = ''; };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = ''; document.body.classList.remove('wl-dragging'); };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
     document.body.style.cursor = 'col-resize';
+    // divider drags must track the pointer 1:1 — suspend the collapse transition
+    document.body.classList.add('wl-dragging');
   }
 
   paletteMatches() {
