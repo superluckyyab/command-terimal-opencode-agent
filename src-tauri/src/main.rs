@@ -11,7 +11,9 @@ use tauri::{Manager, State};
 struct PtySession {
     writer: Box<dyn Write + Send>,
     master: Box<dyn MasterPty + Send>,
-    child: Box<dyn portable_pty::Child + Send + Sync>,
+    // the child itself is owned by the waiter thread (see pty_spawn); we keep a
+    // killer handle so pty_kill still works
+    killer: Box<dyn portable_pty::ChildKiller + Send + Sync>,
 }
 
 #[derive(Default)]
@@ -83,8 +85,9 @@ fn pty_spawn(
         cmd.cwd(home);
     }
 
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+    let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     drop(pair.slave);
+    let killer = child.clone_killer();
 
     let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
     let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
@@ -108,7 +111,17 @@ fn pty_spawn(
                 Err(_) => break,
             }
         }
-        let _ = app2.emit_all("pty://exit", PtyExit { id: id2.clone() });
+    });
+
+    // Exit detection lives here, NOT on the reader hitting EOF: on Windows the
+    // ConPTY master stays readable after the child exits, so the reader would
+    // block forever and "pty://exit" would never fire — which is what stopped
+    // the disconnect notice (and Enter-to-reconnect) from ever appearing.
+    let app3 = app.clone();
+    let id3 = id.clone();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+        let _ = app3.emit_all("pty://exit", PtyExit { id: id3 });
     });
 
     let mut map = state.0.lock().unwrap();
@@ -117,7 +130,7 @@ fn pty_spawn(
         PtySession {
             writer,
             master: pair.master,
-            child,
+            killer,
         },
     );
     Ok(())
@@ -165,7 +178,7 @@ fn pty_resize(id: String, cols: u16, rows: u16, state: State<PtyState>) -> Resul
 fn pty_kill(id: String, state: State<PtyState>) -> Result<(), String> {
     let mut map = state.0.lock().unwrap();
     if let Some(mut s) = map.remove(&id) {
-        let _ = s.child.kill();
+        let _ = s.killer.kill();
     }
     Ok(())
 }

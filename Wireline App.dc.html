@@ -986,7 +986,6 @@ a{color:var(--color-accent)}a:hover{color:var(--color-accent-600)}
               </div>
               <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
                 <span></span>
-                <label class="radio" style="font-size:12px;user-select:none"><input type="checkbox" checked="{{ dlgSaveKey }}" onChange="{{ onDlgSaveKey }}"><span class="dot" style="border-radius:2px"></span>Save these credentials as a OneKey</label>
               </div>
             </sc-if>
             <sc-if value="{{ dlgIsSerial }}" hint-placeholder-val="{{ false }}">
@@ -1356,7 +1355,7 @@ class Component extends DCLogic {
       apiBase: '',
       apiKey: '',
       dialogOpen: false,
-      dlg: { type: 'SSH', host: '', port: '22', user: '', pass: '', saveKey: false, group: 'Sessions', label: '', agent: false, oneKey: '', baud: '115200', dataBits: '8', parity: 'None', stopBits: '1', flow: 'None', serialData: 'binary', term: 'xterm-256color', charset: 'UTF-8', desc: '', sftp: true, system: 'linux', sysmon: false }
+      dlg: { type: 'SSH', host: '', port: '22', user: '', pass: '', group: 'Sessions', label: '', agent: false, oneKey: '', baud: '115200', dataBits: '8', parity: 'None', stopBits: '1', flow: 'None', serialData: 'binary', term: 'xterm-256color', charset: 'UTF-8', desc: '', sftp: true, system: 'linux', sysmon: false }
     };
     this.termRef = React.createRef();
     this.chatRef = React.createRef();
@@ -1455,13 +1454,13 @@ class Component extends DCLogic {
     this._ptyDead = false;
     this._lineBuf = '';
     if (!sameSession) {
-      // different session → clean slate: clear screen, restart timestamps
+      // different session → clean slate: clear screen and drop its timestamps
       this._scroll = '';
-      this._totalLines = 0;
-      this._lineTs = { 1: new Date().toTimeString().slice(0, 8) };
+      (this._marks || []).forEach(m => { try { m.dispose(); } catch (e) {} });
+      this._marks = [];
       try { term.reset(); } catch (e) {}
     } else {
-      // keep the scrollback, timestamps and line counter running
+      // same session reconnect → keep the scrollback and its timestamps
       term.write('\r\n');
     }
     if (spec) term.write('Connecting to ' + (sess.user ? sess.user + '@' : '') + sess.addr + (sess.port && String(sess.port) !== '22' ? ':' + sess.port : '') + ' …\r\n');
@@ -1494,23 +1493,24 @@ class Component extends DCLogic {
     term.open(host);
     try { if (fit) fit.fit(); } catch (e) {}
     this.xterm = term; this.xtermFit = fit;
-    // WindTerm-style gutter: timestamp + running line number, aligned to xterm rows
+    // WindTerm-style gutter: a timestamp per output line, aligned to xterm rows
     try {
-      this._lineTs = {}; this._totalLines = 0;
+      this._marks = [];
       this.xtermGutter = document.createElement('div');
       this.xtermGutter.style.cssText = 'position:absolute;left:0;top:0;width:64px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
       host.appendChild(this.xtermGutter);
+      // Anchor each timestamp to the actual buffer line with an xterm marker.
+      // A marker follows its line through scrolling/reflow, so a line's time is
+      // fixed once written: resizing (opening Sender/Find) can no longer shift
+      // the mapping, which is what made every timestamp jump on a UI click.
       term.onLineFeed(() => {
-        // Only count line feeds produced by real terminal output. Resizing the
-        // terminal (e.g. opening the Sender/Find panel) also scrolls the buffer
-        // and would otherwise inflate the counter, shifting every line number.
-        if (!this._writing) return;
-        this._totalLines++;
-        const t = new Date().toTimeString().slice(0, 8);
-        // stamp when a line STARTS: the LF completes line N and begins line N+1
-        if (!this._lineTs[this._totalLines]) this._lineTs[this._totalLines] = t;
-        this._lineTs[this._totalLines + 1] = t;
-        if (this._totalLines % 500 === 0) { const cut = this._totalLines - 6000; for (const k in this._lineTs) if (+k < cut) delete this._lineTs[k]; }
+        try {
+          const m = term.registerMarker(0);
+          if (!m) return;
+          m.__ts = new Date().toTimeString().slice(0, 8);
+          this._marks.push(m);
+          if (this._marks.length > 4000) { const old = this._marks.shift(); try { old.dispose(); } catch (e) {} }
+        } catch (e) {}
       });
       term.onRender(() => this.renderGutter());
       term.onScroll(() => this.renderGutter());
@@ -1596,12 +1596,8 @@ class Component extends DCLogic {
     // xterm reassembles CJK from the raw bytes.
     const inNormal = term.buffer && term.buffer.active && term.buffer.active.type === 'normal';
     const hasEsc = text.indexOf('\x1b') >= 0;
-    // mark that line feeds seen during this write come from real output, so the
-    // gutter counter ignores feeds caused by resizing (see onLineFeed)
-    this._writing = (this._writing || 0) + 1;
-    const done = () => { this._writing = Math.max(0, (this._writing || 1) - 1); };
-    if (this.state.ipColor && inNormal && text && !hasEsc && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text), done);
-    else term.write(u8, done);
+    if (this.state.ipColor && inNormal && text && !hasEsc && text.indexOf('�') < 0 && /[0-9A-Za-z]/.test(text)) term.write(this.ipColorize(text));
+    else term.write(u8);
   }
 
   writeBytesToPty(octets) {
@@ -1707,11 +1703,9 @@ class Component extends DCLogic {
 
   terminalText() { return this._scroll || ''; }
 
-  // Draw the timestamp + line-number gutter, aligned to xterm's rendered rows.
-  // Numbering is anchored at the CURSOR row: the shell's current line is always
-  // logical line (_totalLines + 1), and we walk upward assigning numbers, so
-  // rows line up with real content even while the buffer is not yet full.
-  // Wrapped continuation rows share their logical line's number (shown once).
+  // Draw the timestamp gutter, aligned to xterm's rendered rows. Each timestamp
+  // is carried by an xterm marker pinned to its buffer line, so a line keeps the
+  // time it was written no matter how the view scrolls, resizes or reflows.
   renderGutter() {
     const term = this.xterm, gutter = this.xtermGutter, host = this.xtermHostRef.current;
     if (!term || !gutter || !host) return;
@@ -1723,34 +1717,25 @@ class Component extends DCLogic {
       const rrect = rowsEl.getBoundingClientRect(), hrect = host.getBoundingClientRect();
       const offY = rrect.top - hrect.top;
       const viewportY = buf.viewportY;
-      const cursorAbs = buf.baseY + buf.cursorY;
-      const total = this._totalLines || 0; // completed logical lines so far
       const kids = rowsEl.children;
-      // logical line number for each visible row, walking up from the cursor
-      const nums = {};
-      if (cursorAbs >= viewportY) {
-        let g = total + 1;
-        for (let a = cursorAbs; a >= viewportY; a--) {
-          nums[a] = g;
-          const line = buf.getLine(a);
-          if (!line || !line.isWrapped) g--;
-        }
+      // marker line → timestamp, for the visible window only
+      const map = {};
+      const marks = this._marks || [];
+      const last = viewportY + kids.length;
+      for (let j = 0; j < marks.length; j++) {
+        const m = marks[j];
+        if (!m || m.isDisposed) continue;
+        const l = m.line;
+        if (l >= viewportY && l < last) map[l] = m.__ts;
       }
       let html = '';
       for (let i = 0; i < kids.length; i++) {
-        const a = viewportY + i;
-        if (a > cursorAbs) break; // rows past the shell's current line are unwritten
-        const g = nums[a];
-        if (!g || g <= 0) continue;
-        const line = buf.getLine(a);
-        if (line && line.isWrapped) continue; // continuation of the row above
-        // stamped when the line was produced; never re-read the clock on repaint
-        const ts = this._lineTs[g] || '';
+        const ts = map[viewportY + i];
         if (!ts) continue;
+        const line = buf.getLine(viewportY + i);
+        if (line && line.isWrapped) continue; // continuation of the row above
         const k = kids[i];
         const top = offY + k.offsetTop, h = k.offsetHeight;
-        // timestamp only — the running line number was noise, and dropping it
-        // also removes any chance of a number drifting out of sync
         html += '<div style="position:absolute;top:' + top + 'px;right:5px;height:' + h + 'px;line-height:' + h + 'px;white-space:nowrap">'
           + '<span style="color:#5f5b59">[' + ts + ']</span></div>';
       }
@@ -2822,15 +2807,22 @@ class Component extends DCLogic {
     const sess = { id, name, host: name, sub, type, group: d.group || 'Sessions', live: true, access: 'allowed', ping: '—', addr: d.host, port: d.port || '22', user, pass };
     // The stored password is sent automatically when ssh prompts (see onPtyData);
     // leave it blank to type it in the terminal instead.
+    // OneKeys are created by hand in the OneKey Manager — connecting never
+    // records one, which is what filled the list with duplicate "user@host".
     this.setState(s => {
-      let oneKeys = s.oneKeys;
-      if (type === 'ssh' && d.saveKey && user && !d.oneKey) {
-        oneKeys = s.oneKeys.concat({ id: 'k' + (++this.seq), name: user + '@' + (d.host || name), user, pass, pwOn: !!pass });
-        this.persistOneKeys(oneKeys);
-      }
-      const dlg = Object.assign({}, s.dlg, { host: '', user: '', pass: '', label: '', oneKey: '', saveKey: false });
-      return { sessions: s.sessions.concat(sess), oneKeys, dialogOpen: false, dlg };
+      const dlg = Object.assign({}, s.dlg, { host: '', user: '', pass: '', label: '', oneKey: '' });
+      return { sessions: s.sessions.concat(sess), dialogOpen: false, dlg };
     }, () => this.openSession(id));
+  }
+
+  // OneKey names are aliases and must be unique — suffix until free.
+  uniqueKeyName(base, excludeId) {
+    base = (base || '').trim() || 'onekey';
+    const taken = (n) => this.state.oneKeys.some(k => k.id !== excludeId && (k.name || '').toLowerCase() === n.toLowerCase());
+    if (!taken(base)) return base;
+    let i = 2, n;
+    do { n = base + '-' + (i++); } while (taken(n));
+    return n;
   }
 
   persistOneKeys(list) {
@@ -3280,11 +3272,26 @@ class Component extends DCLogic {
         const k = st.oneKeys.find(x => x.id === st.activeKey); if (!k) return;
         let v = null; try { v = window.prompt('OneKey 名称:', k.name); } catch (e) {}
         if (v == null || !v.trim()) return;
-        this.setState(s => ({ oneKeys: s.oneKeys.map(x => x.id === s.activeKey ? Object.assign({}, x, { name: v.trim() }) : x) }));
+        const name = this.uniqueKeyName(v, st.activeKey); // never collide
+        this.setState(s => ({ oneKeys: s.oneKeys.map(x => x.id === s.activeKey ? Object.assign({}, x, { name }) : x) }), () => this.persistOneKeys());
       },
-      okAdd: () => { const id = 'k' + (++this.seq); this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name: 'new-onekey', user: '', pass: '', pwOn: true, idFiles: {}, kbi: [] }), activeKey: id, okKeySel: 0 })); },
+      okAdd: () => {
+        // Ask for an alias like WindTerm's "Create OneKey". If the prompt isn't
+        // available, fall back to a generated unique name (rename afterwards).
+        let v, prompted = false;
+        try { v = window.prompt('Enter a name for the new OneKey:', this.uniqueKeyName('onekey')); prompted = true; } catch (e) {}
+        if (prompted && v === null) return; // cancelled
+        const name = this.uniqueKeyName(prompted ? v : '');
+        const id = 'k' + (++this.seq);
+        this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name, user: '', pass: '', pwOn: true, idFiles: {}, kbi: [] }), activeKey: id, okKeySel: 0 }), () => this.persistOneKeys());
+      },
       okRemove: () => this.setState(s => { const rest = s.oneKeys.filter(k => k.id !== s.activeKey); this.persistOneKeys(rest); return { oneKeys: rest, activeKey: rest[0] ? rest[0].id : null }; }),
-      okDuplicate: () => this.setState(s => { const src = s.oneKeys.find(k => k.id === s.activeKey); if (!src) return {}; const id = 'k' + (++this.seq); return { oneKeys: s.oneKeys.concat(Object.assign({}, src, { id, name: src.name + '-copy' })), activeKey: id }; }),
+      okDuplicate: () => {
+        const src = st.oneKeys.find(k => k.id === st.activeKey); if (!src) return;
+        const name = this.uniqueKeyName(src.name + '-copy');
+        const id = 'k' + (++this.seq);
+        this.setState(s => ({ oneKeys: s.oneKeys.concat(Object.assign({}, src, { id, name })), activeKey: id }), () => this.persistOneKeys());
+      },
       saveOneKey: () => { this.persistOneKeys(); this.setState({ oneKeyOpen: false }); },
       // login dialog
       pickerOpen: st.pickerOpen, pickerHost: st.pickerHost,
@@ -3908,7 +3915,6 @@ class Component extends DCLogic {
       dlgPort: st.dlg.port, onDlgPort: setDlg('port'),
       dlgUser: st.dlg.user, onDlgUser: setDlg('user'),
       dlgPass: st.dlg.pass, onDlgPass: setDlg('pass'),
-      dlgSaveKey: st.dlg.saveKey, onDlgSaveKey: () => this.setState(s => ({ dlg: Object.assign({}, s.dlg, { saveKey: !s.dlg.saveKey }) })),
       hasOneKeys: st.oneKeys.length > 0,
       dlgGroup: st.dlg.group, onDlgGroup: setDlg('group'),
       dlgLabel: st.dlg.label, onDlgLabel: setDlg('label'),
