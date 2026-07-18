@@ -554,10 +554,7 @@ body.wl-dragging .wb-grid{transition:none}
       </div>
       <!-- native opencode: a real opencode terminal BELOW the chat — both usable -->
       <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
-      <div style="flex:1.2 1 0;min-height:120px;display:flex;flex-direction:column;border-top:1px solid var(--color-divider)">
-        <div style="padding:3px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600);background:var(--color-surface);flex:none">opencode terminal — type here</div>
-        <div ref="{{ opHostRef }}" style="flex:1;min-height:0;display:flex;background:#1b1a19;overflow:hidden"></div>
-      </div>
+      <div ref="{{ opHostRef }}" style="flex:1.2 1 0;min-height:140px;display:flex;background:#1b1a19;overflow:hidden;border-top:1px solid var(--color-divider)"></div>
       </sc-if>
 
       <!-- composer -->
@@ -1779,8 +1776,11 @@ class Component extends DCLogic {
     let fit = null, search = null;
     try { fit = new window.FitAddon.FitAddon(); term.loadAddon(fit); } catch (e) {}
     try { search = new window.SearchAddon.SearchAddon(); term.loadAddon(search); } catch (e) {}
-    term.open(inner);
-    const pane = { pid, el, inner, term, fit, search, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0, fgActive: false };
+    // Layout panes are opened here (mounted right after via rebuildLayout).
+    // Standalone panes open LATER, once attached to the DOM — opening an xterm on a
+    // detached, zero-size element leaves its renderer uninitialised (blank).
+    if (!standalone) term.open(inner);
+    const pane = { pid, el, inner, term, fit, search, opened: !standalone, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0, fgActive: false };
     // WindTerm-style convenience: selecting text copies it to the clipboard
     term.onSelectionChange(() => {
       const s = term.getSelection();
@@ -2479,14 +2479,14 @@ class Component extends DCLogic {
       pane.el.style.flex = '1 1 0';
       this.opPane = pane;
       host.appendChild(pane.el);
-      // fit FIRST (so the PTY starts at the pane's real size), then connect a
-      // local shell and drop into opencode. Re-fit a couple of times because the
-      // host may still be laying out on the first frame.
+      // open the xterm now that the element is attached and has a size, then fit,
+      // connect a local shell, and drop into opencode.
+      if (!pane.opened) { try { pane.term.open(pane.inner); pane.opened = true; } catch (e) {} }
       setTimeout(() => {
         this.fitPane(pane);
         this.connectPane(pane, null); // local shell on this machine
-        setTimeout(() => this.fitPane(pane), 250);
-        setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: 'opencode\r' }).catch(() => {}); }, 800);
+        setTimeout(() => { this.fitPane(pane); try { pane.term.refresh(0, pane.term.rows - 1); } catch (e) {} }, 250);
+        setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: 'opencode\r' }).catch(() => {}); }, 850);
       }, 60);
     } else if (this.opPane.el.parentNode !== host) {
       host.appendChild(this.opPane.el);
