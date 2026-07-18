@@ -494,7 +494,7 @@ body.wl-dragging .wb-grid{transition:none}
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"></circle><path d="M8 5v3l2 1.5"></path></svg>
             <sc-if value="{{ timersBadgeOn }}" hint-placeholder-val="{{ false }}"><span style="position:absolute;top:0px;right:0px;min-width:12px;height:12px;border-radius:6px;background:var(--color-accent-2);color:#fff;font-size:8px;display:grid;place-items:center;padding:0 2px">{{ timersBadge }}</span></sc-if>
           </span>
-          <span onClick="{{ toggleSkillsPanel }}" title="Skills" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ skillsIconC }}" style-hover="background:var(--color-neutral-200)">
+          <span onClick="{{ toggleSkillsPanel }}" title="Quick prompts — manage" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ skillsIconC }}" style-hover="background:var(--color-neutral-200)">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 1.5l1.8 3.9 4.2.5-3.1 2.9.8 4.2L8 10.9 4.3 13l.8-4.2L2 5.9l4.2-.5z"></path></svg>
           </span>
           <span onClick="{{ toggleMcpPanel }}" title="MCP servers" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ mcpIconC }}" style-hover="background:var(--color-neutral-200)">
@@ -584,6 +584,19 @@ body.wl-dragging .wb-grid{transition:none}
           <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:160px;height:30px;font-size:12px;padding:2px 8px">
             <sc-for list="{{ modelOpts }}" as="mo" hint-placeholder-count="1"><option value="{{ mo.v }}">{{ mo.label }}</option></sc-for>
           </select>
+          <!-- quick prompts: pick one to send to the AI agent -->
+          <span style="position:relative;display:flex;align-items:center">
+            <span onClick="{{ togglePromptPick }}" title="Quick prompts" style="display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:{{ promptPickIconC }};font-size:14px" style-hover="background:var(--color-neutral-200)">★</span>
+            <sc-if value="{{ promptPickOpen }}" hint-placeholder-val="{{ false }}">
+              <div class="pop pop-bl" style="position:absolute;bottom:110%;left:0;z-index:70;min-width:240px;max-width:340px;max-height:280px;overflow-y:auto;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
+                <sc-for list="{{ promptPickItems }}" as="pp" hint-placeholder-count="3">
+                  <div onClick="{{ pp.use }}" title="{{ pp.text }}" style="padding:6px 12px;font-size:12.5px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:var(--color-accent-100)">{{ pp.label }}</div>
+                </sc-for>
+                <div style="height:1px;background:var(--color-divider);margin:4px 0"></div>
+                <div onClick="{{ promptAddCurrent }}" style="padding:6px 12px;font-size:12.5px;cursor:pointer;color:var(--color-accent-700)" style-hover="background:var(--color-accent-100)">+ Save current input as prompt</div>
+              </div>
+            </sc-if>
+          </span>
           <span style="flex:1"></span>
           <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
           <select class="input" value="{{ aiMode }}" onChange="{{ onModeSelect }}" style="width:auto;height:30px;font-size:12.5px;padding:2px 8px">
@@ -673,6 +686,7 @@ body.wl-dragging .wb-grid{transition:none}
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:var(--space-3);margin-bottom:22px">
         <div class="field"><label>Model</label><input class="input" type="text" value="{{ model }}" onChange="{{ onModel }}"></div>
+        <div class="field"><label>Chat model (chat mode)</label><input class="input" type="text" placeholder="gpt-4o-mini / glm-4-plus …" value="{{ chatModel }}" onChange="{{ onChatModel }}"></div>
         <div class="field"><label>Command timeout (s)</label><input class="input" type="text" value="{{ timeout }}" onChange="{{ onTimeout }}"></div>
       </div>
 
@@ -826,20 +840,40 @@ body.wl-dragging .wb-grid{transition:none}
   <!-- ═══ SKILLS PANEL ═══ -->
   <sc-if value="{{ skillsOpen }}" hint-placeholder-val="{{ false }}">
     <div class="dialog-backdrop" style="z-index:76" onClick="{{ toggleSkillsPanel }}">
-      <div class="dialog" style="width:460px;padding:0;overflow:hidden" onClick="{{ stop }}">
+      <div class="dialog" style="width:560px;padding:0;overflow:hidden;display:flex;flex-direction:column" onClick="{{ stop }}">
         <div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-bottom:1px solid var(--color-divider)">
-          <span style="font-family:var(--font-heading);font-weight:600;font-size:16px">Installed skills</span>
+          <span style="font-family:var(--font-heading);font-weight:600;font-size:16px">Quick prompts</span>
+          <span style="font-size:12px;color:var(--color-neutral-500)">sent to the AI agent via ★ in the composer</span>
           <span onClick="{{ toggleSkillsPanel }}" style="margin-left:auto;cursor:pointer;color:var(--color-neutral-600);font-size:16px" style-hover="color:var(--color-text)">×</span>
         </div>
-        <div style="max-height:340px;overflow-y:auto;padding:6px 0">
-          <sc-for list="{{ skillRows }}" as="sk" hint-placeholder-count="4">
-            <div style="display:flex;align-items:baseline;gap:10px;padding:8px 18px;border-bottom:1px solid var(--color-divider)">
-              <span style="font-family:ui-monospace,Menlo,monospace;font-size:13px;font-weight:600;color:var(--color-accent-700)">{{ sk.name }}</span>
-              <span style="font-size:12px;color:var(--color-neutral-600)">{{ sk.desc }}</span>
+        <div style="display:grid;grid-template-columns:200px 1fr;min-height:320px">
+          <div style="display:flex;flex-direction:column;border-right:1px solid var(--color-divider);background:var(--color-surface)">
+            <div style="flex:1;overflow-y:auto;padding:4px 0;max-height:300px">
+              <sc-for list="{{ pmList }}" as="pm" hint-placeholder-count="4">
+                <div onClick="{{ pm.pick }}" style="padding:7px 14px;font-size:12.5px;font-weight:{{ pm.w }};cursor:pointer;background:{{ pm.bg }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-hover="background:var(--color-neutral-200)">{{ pm.label }}</div>
+              </sc-for>
             </div>
-          </sc-for>
+            <div style="border-top:1px solid var(--color-divider);display:flex;align-items:center;gap:14px;padding:8px 14px;font-size:12.5px;color:var(--color-neutral-500)">
+              <span onClick="{{ pmAdd }}" title="Add prompt" style="cursor:pointer;font-size:16px;line-height:1" style-hover="color:var(--color-text)">+</span>
+              <span onClick="{{ pmDel }}" title="Remove selected" style="cursor:pointer;font-size:16px;line-height:1" style-hover="color:var(--color-text)">−</span>
+            </div>
+          </div>
+          <div style="padding:14px 18px;display:flex;flex-direction:column;gap:10px;min-height:0">
+            <sc-if value="{{ pmHasSel }}" hint-placeholder-val="{{ true }}">
+              <div style="display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:center">
+                <label style="text-align:right;font-size:12.5px;color:var(--color-neutral-700)">Label:</label>
+                <input class="input" type="text" value="{{ pmLabel }}" onChange="{{ onPmLabel }}" style="height:28px;font-size:12.5px">
+              </div>
+              <div style="display:grid;grid-template-columns:52px 1fr;gap:10px;align-items:start;flex:1;min-height:0">
+                <label style="text-align:right;font-size:12.5px;color:var(--color-neutral-700);padding-top:6px">Text:</label>
+                <textarea class="input" value="{{ pmText }}" onChange="{{ onPmText }}" placeholder="Prompt sent to the AI agent" style="height:100%;min-height:190px;resize:none;font-size:12.5px;line-height:1.5"></textarea>
+              </div>
+            </sc-if>
+          </div>
         </div>
-        <div style="padding:10px 18px 4px"></div>
+        <div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--color-divider)">
+          <button class="btn btn-primary" style="min-width:90px" onClick="{{ toggleSkillsPanel }}">Ok</button>
+        </div>
       </div>
     </div>
   </sc-if>
@@ -1378,6 +1412,10 @@ class Component extends DCLogic {
       termWrap: true,
       resetOpen: false,
       askDlg: { open: false, title: '', value: '' },
+      chatModel: 'gpt-4o-mini',
+      aiPrompts: [],        // quick prompts sent to the AI agent
+      aiPromptSel: 0,
+      promptPickOpen: false,
       highlights: [],
       cmdHistories: {},
       cmdHistH: 170,
@@ -1520,6 +1558,8 @@ class Component extends DCLogic {
     if (cfg.logDir) next.recDir = cfg.logDir;
     if (typeof cfg.termWrap === 'boolean') next.termWrap = cfg.termWrap;
     if (cfg.agentMode) next.agentMode = cfg.agentMode;
+    if (cfg.model && cfg.model.chatModel) next.chatModel = cfg.model.chatModel;
+    if (Array.isArray(cfg.aiPrompts)) next.aiPrompts = this.dedupeIds(cfg.aiPrompts, 'ap');
     if (Object.keys(next).length) this.setState(next, () => this.fitAllPanes());
   }
 
@@ -1529,7 +1569,8 @@ class Component extends DCLogic {
       oneKeys: st.oneKeys,
       quickCmds: st.quickCmds,
       quickGroups: st.quickGroups,
-      model: { apiBase: st.apiBase, apiKey: st.apiKey, model: st.model },
+      model: { apiBase: st.apiBase, apiKey: st.apiKey, model: st.model, chatModel: st.chatModel },
+      aiPrompts: st.aiPrompts,
       logDir: st.recDir,
       termWrap: st.termWrap !== false,
       agentMode: st.agentMode
@@ -1548,6 +1589,22 @@ class Component extends DCLogic {
     const v = this.state.askDlg.value;
     const cb = this._askCb; this._askCb = null;
     this.setState({ askDlg: { open: false, title: '', value: '' } }, () => { if (cb) cb(v); });
+  }
+
+  // ─── AI quick prompts (star next to the model select; managed via the
+  // star in the AI panel header). Their text is sent to the AI agent. ───
+  aiPromptSelObj() {
+    const l = this.state.aiPrompts;
+    if (!l.length) return null;
+    return l[Math.max(0, Math.min(this.state.aiPromptSel, l.length - 1))];
+  }
+
+  addAiPrompt(label, text) {
+    const id = 'ap' + (++this.seq);
+    this.setState(s => ({
+      aiPrompts: s.aiPrompts.concat({ id, label: (label || '').trim() || (text || '').trim().slice(0, 24) || 'prompt', text: text || '' }),
+      aiPromptSel: s.aiPrompts.length
+    }), () => this.saveConfig());
   }
 
   // Dynamic line-wrap toggle: refit every pane and persist the choice.
@@ -1851,6 +1908,22 @@ class Component extends DCLogic {
       try { if (term.textarea) term.textarea.addEventListener('focus', () => this.setActivePane(pid)); } catch (e) {}
     }
     pane.standalone = !!standalone;
+    // Wheel support for full-screen TUIs (opencode, vim, less): the alternate
+    // screen has no scrollback, so translate wheel ticks into arrow keys —
+    // unless the app requested mouse tracking (then xterm already forwards it).
+    el.addEventListener('wheel', (e) => {
+      try {
+        const buf = term.buffer && term.buffer.active;
+        if (!buf || buf.type !== 'alternate') return; // normal screen: xterm scrolls its own scrollback
+        let mouseOn = false;
+        try { const mm = term.modes && term.modes.mouseTrackingMode; mouseOn = !!(mm && mm !== 'none'); } catch (er) {}
+        if (mouseOn) return;
+        e.preventDefault();
+        const n = Math.max(1, Math.min(5, Math.round(Math.abs(e.deltaY) / 40) || 1));
+        const seq = (e.deltaY < 0 ? '\x1b[A' : '\x1b[B').repeat(n);
+        if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: seq }).catch(() => {});
+      } catch (er) {}
+    }, { passive: false });
     // refit whenever the container resizes → cols match width → lines wrap
     try {
       pane.ro = new ResizeObserver(() => {
@@ -2523,7 +2596,7 @@ class Component extends DCLogic {
     this.syncXterm();
     this.syncOpTerminal();
     // persist quick commands + groups whenever they change
-    const qj = JSON.stringify({ g: this.state.quickGroups, c: this.state.quickCmds });
+    const qj = JSON.stringify({ g: this.state.quickGroups, c: this.state.quickCmds, p: this.state.aiPrompts });
     if (qj !== this._lastQuickJson) {
       this._lastQuickJson = qj;
       try { localStorage.setItem('wireline-quickcmds-v1', JSON.stringify({ groups: this.state.quickGroups, cmds: this.state.quickCmds })); } catch (e) {}
@@ -3271,6 +3344,36 @@ class Component extends DCLogic {
     });
   }
 
+  // Plain chat: no terminal driving, no command execution — just conversation
+  // with the configured OpenAI-compatible model (Settings → API base/key and
+  // "Chat model"). The transcript lives in the same per-terminal chat store.
+  async askChat(sessId) {
+    if (!this.state.apiBase || !this.state.apiKey) {
+      this.setThinking(sessId, false);
+      this.opSay('Chat needs an API endpoint: set API base URL, API key and Chat model in Settings.', true, '', sessId);
+      return;
+    }
+    const history = this.chatOf(sessId)
+      .filter(m => (m.kind === 'user' || m.kind === 'op') && m.text)
+      .slice(-20)
+      .map(m => ({ role: m.kind === 'user' ? 'user' : 'assistant', content: (m.quote ? m.quote + '\n\n' : '') + m.text }));
+    try {
+      const resp = await fetch(this.state.apiBase.replace(/\/$/, '') + '/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + this.state.apiKey },
+        body: JSON.stringify({ model: this.state.chatModel || 'gpt-4o-mini', max_tokens: 2048, messages: history })
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      const data = await resp.json();
+      const txt = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '(empty reply)';
+      this.setThinking(sessId, false);
+      this.opSay(txt, false, '', sessId);
+    } catch (e) {
+      this.setThinking(sessId, false);
+      this.opSay('Chat request failed: ' + (e.message || e), true, '', sessId);
+    }
+  }
+
   // Real model call over an OpenAI-compatible endpoint (see Settings → API base URL / key).
   // When no endpoint is configured, sendAI falls back to the built-in scripted playbooks.
   async askModel(sessId, sessName) {
@@ -3424,6 +3527,7 @@ class Component extends DCLogic {
         this.opSay('Using @' + mcp.name + ' MCP → ' + (atM[2] || 'ready') + '\n\n' + (mcp.name === 'kubernetes' ? 'kubectl get pods -n prod — 3 running, 0 pending. Deployment app-backend is healthy at rev 2.4.1.' : mcp.name === 'prometheus' ? 'query: rate(http_requests_total{code=~"5.."}[5m]) → 0.02/s and falling since the restart.' : mcp.name === 'github' ? 'Latest release v2.4.1 · 3 open PRs · CI green on main.' : 'Listed /var/log on web-01 — nginx/, journal/, audit/. Ready for file ops.'), false, '', sessId);
         return;
       }
+      if (this.state.model === '__chat__') { this.askChat(sessId); return; }
       if (this.state.model === 'opencode') { this.askOpencode(sessId, sessName, quote ? quote + ' ' + text : text); return; }
       if (this.state.apiBase && this.state.apiKey) { this.askModel(sessId, sessName); return; }
       const pb = this.playbookFor(quote ? quote + ' ' + text : text, sessName);
@@ -3441,8 +3545,13 @@ class Component extends DCLogic {
     // just pipes what you type into opencode's PTY (you can also type in it directly).
     if (this.state.agentMode === 'native') {
       const p = this.opPane;
-      if (p && p.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: p.ptyId, data: text + '\r' }).catch(() => {});
-      this.setState({ draft: '' });
+      // A quoted terminal selection rides along in opencode's reference style:
+      // "@terminal <content>" prefixed to the message (single line — a raw \n
+      // would submit the TUI input early).
+      const q = (this.state.quote || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+      const data = (q ? '@terminal ' + q + ' — ' : '') + text;
+      if (p && p.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: p.ptyId, data: data + '\r' }).catch(() => {});
+      this.setState({ draft: '', quote: '' });
       return;
     }
     if (text.startsWith('/')) {
@@ -4560,6 +4669,43 @@ class Component extends DCLogic {
       toggleSkillsPanel: () => this.setState(s => ({ skillsOpen: !s.skillsOpen })),
       skillsOpen: st.skillsOpen,
       skillsIconC: st.skillsOpen ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
+      // quick-prompt picker (composer ★)
+      togglePromptPick: () => this.setState(s => ({ promptPickOpen: !s.promptPickOpen })),
+      promptPickOpen: st.promptPickOpen,
+      promptPickIconC: st.promptPickOpen || st.aiPrompts.length ? 'var(--color-accent-2-700)' : 'var(--color-neutral-600)',
+      promptPickItems: st.aiPrompts.map(p => ({
+        label: p.label, text: p.text,
+        use: () => {
+          const empty = !st.draft.trim();
+          this.setState(s => ({
+            promptPickOpen: false,
+            draft: s.draft.trim() ? s.draft.replace(/\s+$/, '') + ' ' + p.text : p.text
+          }), () => { if (empty) this.send(); }); // empty composer → one click sends
+        }
+      })),
+      promptAddCurrent: () => {
+        const t = st.draft.trim();
+        this.setState({ promptPickOpen: false });
+        if (t) this.askText('Prompt label', t.slice(0, 24), (lb) => this.addAiPrompt(lb, t));
+        else this.askText('Prompt text (sent to the AI agent)', '', (txt) => { if (!txt.trim()) return; this.askText('Prompt label', txt.trim().slice(0, 24), (lb) => this.addAiPrompt(lb, txt.trim())); });
+      },
+      // quick-prompt manager (panel-header ★)
+      pmList: st.aiPrompts.map((p, i) => {
+        const selIdx = Math.max(0, Math.min(st.aiPromptSel, st.aiPrompts.length - 1));
+        return {
+          label: p.label || '(untitled)',
+          bg: i === selIdx ? 'var(--color-accent-100)' : 'transparent',
+          w: i === selIdx ? '600' : '400',
+          pick: () => this.setState({ aiPromptSel: i })
+        };
+      }),
+      pmHasSel: !!this.aiPromptSelObj(),
+      pmLabel: this.aiPromptSelObj() ? this.aiPromptSelObj().label : '',
+      onPmLabel: (e) => { const v = e.target.value; const sel = this.aiPromptSelObj(); if (!sel) return; this.setState(s => ({ aiPrompts: s.aiPrompts.map(p => p.id === sel.id ? Object.assign({}, p, { label: v }) : p) })); },
+      pmText: this.aiPromptSelObj() ? this.aiPromptSelObj().text : '',
+      onPmText: (e) => { const v = e.target.value; const sel = this.aiPromptSelObj(); if (!sel) return; this.setState(s => ({ aiPrompts: s.aiPrompts.map(p => p.id === sel.id ? Object.assign({}, p, { text: v }) : p) })); },
+      pmAdd: () => this.askText('Prompt label', '', (lb) => this.addAiPrompt(lb, '')),
+      pmDel: () => { const sel = this.aiPromptSelObj(); if (!sel) return; this.setState(s => ({ aiPrompts: s.aiPrompts.filter(p => p.id !== sel.id), aiPromptSel: Math.max(0, s.aiPromptSel - 1) }), () => this.saveConfig()); },
       toggleMcpPanel: () => this.setState(s => ({ mcpOpen: !s.mcpOpen })),
       mcpOpen: st.mcpOpen,
       mcpIconC: st.mcpOpen ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
@@ -4621,16 +4767,20 @@ class Component extends DCLogic {
         togglePin: () => this.setState(s => ({ mcps: s.mcps.map(x => x.name === m.name ? Object.assign({}, x, { pinned: !x.pinned }) : x) })),
         use: () => this.setState({ mcpOpen: false, draft: '@' + m.name + ' ' })
       })),
-      aiModelShort: st.agentMode === 'native' ? 'opencode (native)' : st.model,
+      aiModelShort: st.agentMode === 'native' ? 'opencode (native)' : (st.model === '__chat__' ? 'chat' : st.model),
       // The bottom-left dropdown is the single AI-backend switch. "opencode (native)"
       // hands the terminal over to the real opencode TUI; every other entry is the
       // built-in step-by-step Operator (or an API model).
       aiModelSel: st.agentMode === 'native' ? '__native__' : st.model,
-      modelOpts: st.models.map(m => ({ v: m, label: m })).concat({ v: '__native__', label: 'opencode (native)' }),
+      modelOpts: st.models.map(m => ({ v: m, label: m })).concat([
+        { v: '__native__', label: 'opencode (native)' },
+        { v: '__chat__', label: 'chat (' + (st.chatModel || 'set model') + ')' }
+      ]),
       onModelSel: (e) => {
         const v = e.target.value;
         if (v === '__native__') { this.setAgentMode('native'); return; }
         if (this.state.agentMode === 'native') this.setAgentMode('operator');
+        if (v === '__chat__') { this.setState({ model: '__chat__' }, () => this.saveConfig()); return; }
         if (v === '__add__') {
           this.forceUpdate(); // keep the select on the current model meanwhile
           this.askText('New model name (e.g. glm-4-plus)', '', (raw) => {
@@ -4651,6 +4801,7 @@ class Component extends DCLogic {
       mgrRows,
       // settings
       guards, model: st.model, onModel: (e) => this.setState({ model: e.target.value }, () => this.persistModelCfg()),
+      chatModel: st.chatModel, onChatModel: (e) => this.setState({ chatModel: e.target.value }, () => this.saveConfig()),
       timeout: st.timeout, onTimeout: (e) => this.setState({ timeout: e.target.value }),
       cfgPath: st.cfgPath || '',
       onCfgPath: (e) => { const v = e.target.value; this.setState({ cfgPath: v }); },
