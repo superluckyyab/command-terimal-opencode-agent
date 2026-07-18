@@ -504,7 +504,8 @@ body.wl-dragging .wb-grid{transition:none}
         </span>
       </div>
 
-      <!-- transcript (always shown; native mode adds an opencode terminal below) -->
+      <!-- transcript: Operator chat, OR (native) the full opencode terminal -->
+      <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
       <div class="chat-scroll" ref="{{ chatRef }}" style="flex:1;min-height:0;padding:14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
         <sc-for list="{{ chat }}" as="m" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column">
@@ -552,9 +553,10 @@ body.wl-dragging .wb-grid{transition:none}
           <div style="font-size:12px;color:var(--color-accent-2-700);font-style:italic">Operator is thinking…</div>
         </sc-if>
       </div>
-      <!-- native opencode: a real opencode terminal BELOW the chat — both usable -->
+      </sc-if>
+      <!-- native opencode: the whole panel IS the opencode terminal (fills to the top) -->
       <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
-      <div ref="{{ opHostRef }}" style="flex:1.2 1 0;min-height:140px;display:flex;background:#1b1a19;overflow:hidden;border-top:1px solid var(--color-divider)"></div>
+      <div ref="{{ opHostRef }}" style="flex:1;min-height:0;display:flex;background:#1b1a19;overflow:hidden"></div>
       </sc-if>
 
       <!-- composer -->
@@ -582,10 +584,13 @@ body.wl-dragging .wb-grid{transition:none}
           <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:160px;height:30px;font-size:12px;padding:2px 8px">
             <sc-for list="{{ modelOpts }}" as="mo" hint-placeholder-count="1"><option value="{{ mo.v }}">{{ mo.label }}</option></sc-for>
           </select>
-          <select class="input" value="{{ aiMode }}" onChange="{{ onModeSelect }}" style="width:auto;height:30px;font-size:12.5px;padding:2px 8px;margin-left:auto">
+          <span style="flex:1"></span>
+          <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
+          <select class="input" value="{{ aiMode }}" onChange="{{ onModeSelect }}" style="width:auto;height:30px;font-size:12.5px;padding:2px 8px">
             <option value="manual">Manual</option>
             <option value="auto">Auto</option>
           </select>
+          </sc-if>
           <sc-if value="{{ chatBusy }}" hint-placeholder-val="{{ false }}">
             <button class="btn btn-secondary" style="padding-block:6px;color:var(--color-accent-2-700);border-color:var(--color-accent-2-400)" onClick="{{ stopChat }}">⏹ Stop</button>
           </sc-if>
@@ -3432,8 +3437,14 @@ class Component extends DCLogic {
 
   send() {
     const text = this.state.draft.trim(); if (!text) return;
-    // The composer always drives the built-in Operator chat. In native mode the
-    // opencode terminal below is a separate input — you type into it directly.
+    // Native opencode: the whole panel IS the opencode terminal — the composer
+    // just pipes what you type into opencode's PTY (you can also type in it directly).
+    if (this.state.agentMode === 'native') {
+      const p = this.opPane;
+      if (p && p.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: p.ptyId, data: text + '\r' }).catch(() => {});
+      this.setState({ draft: '' });
+      return;
+    }
     if (text.startsWith('/')) {
       this.addChat(this.state.activeTab, { id: ++this.seq, kind: 'user', text });
       this.setState({ draft: '' });
@@ -4635,7 +4646,7 @@ class Component extends DCLogic {
       sendChat: () => this.send(),
       chatBusy: thinkingNow, chatIdle: !thinkingNow,
       stopChat: () => this.stopOpencode(),
-      composerPh: 'Message the Operator…',
+      composerPh: st.agentMode === 'native' ? 'Type to opencode…' : 'Message the Operator…',
       // sessions view
       mgrRows,
       // settings
