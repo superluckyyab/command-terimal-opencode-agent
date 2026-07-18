@@ -203,6 +203,8 @@ body.wl-dragging .wb-grid{transition:none}
           </div>
         </sc-for>
         </div>
+        <!-- ＋ new local terminal (the system this app runs on) -->
+        <span onClick="{{ newLocalTerminal }}" title="New local terminal (this system)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700);align-self:center;flex:none;font-size:17px;line-height:1" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">＋</span>
         <!-- tab list dropdown (view all open terminals) -->
         <span style="position:relative;display:flex;align-items:center;flex:none">
           <span onClick="{{ toggleTabList }}" title="All open terminals" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ tabListIconC }};align-self:center" style-hover="background:var(--color-neutral-200)">
@@ -571,6 +573,16 @@ body.wl-dragging .wb-grid{transition:none}
             </sc-for>
           </div>
         </sc-if>
+        <!-- Operator ⇄ native opencode switch -->
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <div style="display:flex;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden;font-size:12px">
+            <span onClick="{{ setOperatorMode }}" title="Built-in step-by-step Operator" style="padding:4px 10px;cursor:pointer;background:{{ opModeBg }};color:{{ opModeFg }}">Operator</span>
+            <span onClick="{{ setNativeMode }}" title="Run the real opencode TUI in the terminal" style="padding:4px 10px;cursor:pointer;background:{{ natModeBg }};color:{{ natModeFg }};font-family:ui-monospace,Menlo,monospace">opencode</span>
+          </div>
+          <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:11px;color:var(--color-neutral-600)">runs in the terminal ←</span>
+          </sc-if>
+        </div>
         <textarea class="input" rows="2" placeholder="{{ composerPh }}" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}"></textarea>
         <div style="display:flex;align-items:center;gap:8px">
           <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:150px;height:30px;font-size:12px;padding:2px 8px">
@@ -1323,6 +1335,10 @@ class Component extends DCLogic {
       view: 'workbench',
       filter: '',
       aiMode: this.props.defaultAiMode ?? 'manual',
+      // Which AI backend the composer drives: 'operator' = the built-in step-by-step
+      // agent that runs one command at a time in the terminal; 'native' = the real
+      // opencode TUI, launched with `opencode` in the terminal (input is forwarded).
+      agentMode: 'operator',
       openMenu: null,
       openSub: null,
       treeCollapsed: false,
@@ -1469,6 +1485,22 @@ class Component extends DCLogic {
   // copy carries its own config instead of leaving it under C:\Users\…\AppData.
   // Anything previously kept in localStorage is migrated in on first run — old
   // config is never dropped, only copied across.
+  // Ids for anything we persist must survive a restart. this.seq restarts at 100
+  // every launch, so ids built from it collided across runs — that is how six
+  // OneKeys all ended up sharing "k103".
+  uid(prefix) { return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+
+  // Repair configs written by the buggy build: give colliding/missing ids fresh ones.
+  dedupeIds(list, prefix) {
+    if (!Array.isArray(list)) return list;
+    const seen = {};
+    return list.map(item => {
+      if (!item || !item.id || seen[item.id]) item = Object.assign({}, item, { id: this.uid(prefix) });
+      seen[item.id] = true;
+      return item;
+    });
+  }
+
   legacyConfig() {
     const cfg = {};
     try { const s = JSON.parse(localStorage.getItem('wireline-model-v1') || 'null'); if (s) cfg.model = s; } catch (e) {}
@@ -1482,11 +1514,12 @@ class Component extends DCLogic {
     if (!cfg) return;
     const next = {};
     if (cfg.model) { next.apiBase = cfg.model.apiBase || ''; next.apiKey = cfg.model.apiKey || ''; if (cfg.model.model) next.model = cfg.model.model; }
-    if (Array.isArray(cfg.oneKeys)) { next.oneKeys = cfg.oneKeys; next.activeKey = cfg.oneKeys[0] ? cfg.oneKeys[0].id : null; }
-    if (Array.isArray(cfg.quickCmds)) next.quickCmds = cfg.quickCmds;
+    if (Array.isArray(cfg.oneKeys)) { const ok = this.dedupeIds(cfg.oneKeys, 'k'); next.oneKeys = ok; next.activeKey = ok[0] ? ok[0].id : null; }
+    if (Array.isArray(cfg.quickCmds)) next.quickCmds = this.dedupeIds(cfg.quickCmds, 'q');
     if (Array.isArray(cfg.quickGroups) && cfg.quickGroups.length) next.quickGroups = cfg.quickGroups;
     if (cfg.logDir) next.recDir = cfg.logDir;
     if (typeof cfg.termWrap === 'boolean') next.termWrap = cfg.termWrap;
+    if (cfg.agentMode) next.agentMode = cfg.agentMode;
     if (Object.keys(next).length) this.setState(next, () => this.fitAllPanes());
   }
 
@@ -1498,7 +1531,8 @@ class Component extends DCLogic {
       quickGroups: st.quickGroups,
       model: { apiBase: st.apiBase, apiKey: st.apiKey, model: st.model },
       logDir: st.recDir,
-      termWrap: st.termWrap !== false
+      termWrap: st.termWrap !== false,
+      agentMode: st.agentMode
     };
   }
 
@@ -2485,6 +2519,17 @@ class Component extends DCLogic {
     }));
   }
 
+  // ＋ button: open a new terminal on the system the app runs on (local shell).
+  // sshSpecFor returns null for a session with no addr, so the pane spawns the
+  // default local shell.
+  newLocalTerminal() {
+    const n = this.state.sessions.filter(s => s.type === 'local').length + 1;
+    const id = 'local' + (++this.seq);
+    const name = 'local-' + n;
+    const sess = { id, name, host: name, sub: 'shell · local', type: 'local', group: 'Sessions', live: true, access: 'allowed', ping: '—', addr: '', port: '', user: '', pass: '' };
+    this.setState(s => ({ sessions: s.sessions.concat(sess) }), () => this.openSession(id));
+  }
+
   closeTab(id, e) {
     if (e && e.stopPropagation) e.stopPropagation();
     this.setState(s => {
@@ -2834,7 +2879,7 @@ class Component extends DCLogic {
 
   addQuickFromDraft() {
     const cmd = this.state.termDraft.trim(); if (!cmd) return;
-    this.setState(s => ({ quickCmds: s.quickCmds.concat({ id: 'q' + (++this.seq), label: cmd.length > 22 ? cmd.slice(0, 22) + '\u2026' : cmd, cmd, group: 'Quick' }) }));
+    this.setState(s => ({ quickCmds: s.quickCmds.concat({ id: this.uid('q'), label: cmd.length > 22 ? cmd.slice(0, 22) + '\u2026' : cmd, cmd, group: 'Quick' }) }));
   }
 
   // \u2500\u2500\u2500 quick command manager (WindTerm style: groups + batch edit) \u2500\u2500\u2500
@@ -3033,7 +3078,11 @@ class Component extends DCLogic {
     this._opStop = false;
     this._opSess = this.chatKey(sessId);
     this.setThinking(sessId, true);
-    const maxSteps = 10;
+    let ranCmd = false, nudged = false;
+    // Keep going until opencode reports DONE. No fixed step cap — the loop exits
+    // on DONE, on the Stop button (_opStop), or on a terminal switch. maxSteps is
+    // only a runaway guard so a stuck model can't loop unattended forever.
+    const maxSteps = 500; // ponytail: safety ceiling, not a normal stopping point
     for (let step = 0; step < maxSteps; step++) {
       if (this._opStop) { this.setThinking(sessId, false); return; }
       // the live PTY follows the active tab — if the user switched terminals,
@@ -3050,9 +3099,10 @@ class Component extends DCLogic {
         (scroll && scroll.trim() ? 'Recent terminal output (most recent last):\n' + scroll.slice(-3500) + '\n\n' : '') +
         'Goal: ' + goal + '\n\n' +
         'Rules:\n' +
+        '- ALWAYS answer by RUNNING A COMMAND. Never answer from output that was already on the screen before you started — run a command so the user can see exactly how the answer was obtained.\n' +
         '- First write ONE short sentence saying what you will check next and why (this is shown to the user as your reasoning).\n' +
         '- Then give the SINGLE next shell command wrapped in a ```bash code block.\n' +
-        '- When the goal is already satisfied by the output above, reply with a one-line summary starting with "DONE: " and NO code block.';
+        '- Reply with a one-line summary starting with "DONE: " and NO code block ONLY after a command YOU ran (its output is above) already contains the answer or confirmation.';
       let reply;
       try { reply = await this.opencodeOnce(prompt); }
       catch (e) { this.setThinking(sessId, false); this.opSay('Calling opencode failed: ' + (e.message || e) + '\nMake sure opencode is installed and logged in.', true, '', sessId); return; }
@@ -3062,6 +3112,10 @@ class Component extends DCLogic {
       const cmd = mm ? mm[1].trim() : '';
       const isDone = /(^|\n)\s*DONE[:：]/i.test(reply) || !cmd;
       if (isDone) {
+        // The user wants to SEE the query run in the terminal, not an answer
+        // pulled from output that was already on screen. If nothing has run yet,
+        // push back once and make it actually execute a command.
+        if (!ranCmd && !nudged) { nudged = true; goal = goal + '\n\n(You have not run any command yet — you MUST run a command to obtain the answer. Do not answer from earlier output.)'; continue; }
         this.setThinking(sessId, false);
         const summary = reply
           .replace(/```[\s\S]*?```/g, '')
@@ -3080,9 +3134,10 @@ class Component extends DCLogic {
       if (reasoning) this.opSay('💭 ' + reasoning, false, '', sessId);
       this.opSay('▶ ' + cmd, true, '', sessId);
       await this.runInTerminalAndWait(cmd);
+      ranCmd = true;
     }
     this.setThinking(sessId, false);
-    this.opSay('Paused after ' + maxSteps + ' automatic steps. Ask again, or say "continue".', false, '', sessId);
+    this.opSay('Stopped after ' + maxSteps + ' steps (runaway guard). Say "continue" to keep going.', false, '', sessId);
   }
 
   opencodeOnce(prompt) {
@@ -3290,6 +3345,16 @@ class Component extends DCLogic {
 
   send() {
     const text = this.state.draft.trim(); if (!text) return;
+    // Native opencode: the composer is just a bridge to the real opencode TUI
+    // running in the terminal — forward the line to the PTY (no slash handling,
+    // no built-in Operator).
+    if (this.state.agentMode === 'native') {
+      const sessId = this.state.activeTab;
+      if (!this.writeToPty(text + '\r')) { this.opSay('Native opencode needs a live terminal. Open a session (or the ＋ local terminal) first.', false, '', sessId); return; }
+      this.addChat(sessId, { id: ++this.seq, kind: 'user', text });
+      this.setState({ draft: '' });
+      return;
+    }
     if (text.startsWith('/')) {
       this.addChat(this.state.activeTab, { id: ++this.seq, kind: 'user', text });
       this.setState({ draft: '' });
@@ -3297,6 +3362,20 @@ class Component extends DCLogic {
       return;
     }
     this.sendAI(text, this.state.quote);
+  }
+
+  // Toggle the AI backend. Switching to native opencode launches the real
+  // `opencode` TUI in the active terminal so the user can drive it directly.
+  setAgentMode(mode) {
+    if (mode === this.state.agentMode) return;
+    this.setState({ agentMode: mode }, () => this.saveConfig());
+    const sessId = this.state.activeTab;
+    if (mode === 'native') {
+      if (this.writeToPty('opencode\r')) this.opSay('Launched native opencode in the terminal on the left — type here or in the terminal to drive it.', false, '', sessId);
+      else this.opSay('Switched to native opencode. Open a session (or the ＋ local terminal), then it will launch there.', false, '', sessId);
+    } else {
+      this.opSay('Back to the built-in Operator (step-by-step). Native opencode keeps running in the terminal if you started it.', false, '', sessId);
+    }
   }
 
   needsApproval(step) {
@@ -3831,7 +3910,7 @@ class Component extends DCLogic {
       okAdd: () => {
         this.askText('Name for the new OneKey', this.uniqueKeyName('onekey'), (v) => {
           const name = this.uniqueKeyName(v);
-          const id = 'k' + (++this.seq);
+          const id = this.uid('k');
           this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name, user: '', pass: '', pwOn: true, idFiles: {}, kbi: [] }), activeKey: id, okKeySel: 0 }), () => this.persistOneKeys());
         });
       },
@@ -3839,7 +3918,7 @@ class Component extends DCLogic {
       okDuplicate: () => {
         const src = st.oneKeys.find(k => k.id === st.activeKey); if (!src) return;
         const name = this.uniqueKeyName(src.name + '-copy');
-        const id = 'k' + (++this.seq);
+        const id = this.uid('k');
         this.setState(s => ({ oneKeys: s.oneKeys.concat(Object.assign({}, src, { id, name })), activeKey: id }), () => this.persistOneKeys());
       },
       saveOneKey: () => { this.persistOneKeys(); this.setState({ oneKeyOpen: false }); },
@@ -3944,14 +4023,14 @@ class Component extends DCLogic {
       qmEmpty: this.qmCmds().length === 0,
       qmHasSel: !!this.qmSelObj(),
       qmAdd: () => this.setState(s => {
-        const list = s.quickCmds.concat({ id: 'q' + (++this.seq), label: 'Untitled', cmd: '', group: s.quickMgr.group });
+        const list = s.quickCmds.concat({ id: this.uid('q'), label: 'Untitled', cmd: '', group: s.quickMgr.group });
         const n = list.filter(q => (q.group || 'Quick') === s.quickMgr.group).length;
         return { quickCmds: list, quickMgr: Object.assign({}, s.quickMgr, { sel: n - 1 }) };
       }),
       qmDel: () => { const sel = this.qmSelObj(); if (!sel) return; this.setState(s => ({ quickCmds: s.quickCmds.filter(q => q.id !== sel.id), quickMgr: Object.assign({}, s.quickMgr, { sel: Math.max(0, s.quickMgr.sel - 1) }) })); },
       qmUp: () => this.qmMove(-1),
       qmDown: () => this.qmMove(1),
-      qmDup: () => { const sel = this.qmSelObj(); if (!sel) return; this.setState(s => { const list = s.quickCmds.concat(Object.assign({}, sel, { id: 'q' + (++this.seq), label: sel.label + ' copy' })); const n = list.filter(q => (q.group || 'Quick') === s.quickMgr.group).length; return { quickCmds: list, quickMgr: Object.assign({}, s.quickMgr, { sel: n - 1 }) }; }); },
+      qmDup: () => { const sel = this.qmSelObj(); if (!sel) return; this.setState(s => { const list = s.quickCmds.concat(Object.assign({}, sel, { id: this.uid('q'), label: sel.label + ' copy' })); const n = list.filter(q => (q.group || 'Quick') === s.quickMgr.group).length; return { quickCmds: list, quickMgr: Object.assign({}, s.quickMgr, { sel: n - 1 }) }; }); },
       qmLabel: this.qmSelObj() ? (this.qmSelObj().label || '') : '',
       onQmLabel: (e) => { const v = e.target.value; this.qmPatchSel({ label: v }); },
       qmText: this.qmSelObj() ? (this.qmSelObj().cmd || '') : '',
@@ -3977,7 +4056,7 @@ class Component extends DCLogic {
       // dialog onekey
       dlgIsSSH: dlgType === 'SSH',
       dlgOneKey: st.dlg.oneKey, oneKeyOpts,
-      onDlgOneKey: (e) => { const v = e.target.value; this.setState(s => ({ dlg: Object.assign({}, s.dlg, { oneKey: v }) })); },
+      onDlgOneKey: (e) => { const v = e.target.value; this.setState(s => { const k = s.oneKeys.find(x => x.id === v); const extra = k ? { user: k.user || '', pass: k.pass || '' } : {}; return { dlg: Object.assign({}, s.dlg, { oneKey: v }, extra) }; }); },
       // quick-connect toolbar
       qcHost: st.qcHost,
       onQcHost: (e) => this.setState({ qcHost: e.target.value }),
@@ -4024,6 +4103,7 @@ class Component extends DCLogic {
       })(),
       tabListOpen: st.tabListOpen,
       toggleTabList: () => this.setState(s => ({ tabListOpen: !s.tabListOpen, tabListQuery: '' })),
+      newLocalTerminal: () => this.newLocalTerminal(),
       tabListIconC: st.tabListOpen ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
       tabListQuery: st.tabListQuery,
       onTabListQuery: (e) => this.setState({ tabListQuery: e.target.value }),
@@ -4345,6 +4425,12 @@ class Component extends DCLogic {
       aiResizeStart: (e) => this.startPanelDrag(e, 'ai'),
       toggleAi: () => this.setState(s => ({ aiCollapsed: !s.aiCollapsed })),
       aiMode: st.aiMode,
+      // Operator ⇄ native opencode switch
+      agentNative: st.agentMode === 'native',
+      setOperatorMode: () => this.setAgentMode('operator'),
+      setNativeMode: () => this.setAgentMode('native'),
+      opModeBg: st.agentMode === 'native' ? 'transparent' : 'var(--color-accent)', opModeFg: st.agentMode === 'native' ? 'var(--color-text)' : 'var(--color-bg)',
+      natModeBg: st.agentMode === 'native' ? 'var(--color-accent)' : 'transparent', natModeFg: st.agentMode === 'native' ? 'var(--color-bg)' : 'var(--color-text)',
       onModeSelect: (e) => this.setState({ aiMode: e.target.value }),
       setAuto: () => this.setState({ aiMode: 'auto' }),
       setManual: () => this.setState({ aiMode: 'manual' }),
@@ -4475,7 +4561,7 @@ class Component extends DCLogic {
       sendChat: () => this.send(),
       chatBusy: thinkingNow, chatIdle: !thinkingNow,
       stopChat: () => this.stopOpencode(),
-      composerPh: '',
+      composerPh: st.agentMode === 'native' ? 'Type into opencode (runs in the terminal)…' : 'Message the Operator…',
       // sessions view
       mgrRows,
       // settings
