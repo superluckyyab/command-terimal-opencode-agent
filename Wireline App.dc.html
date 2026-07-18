@@ -108,6 +108,68 @@ body.wl-dragging .wb-grid{transition:none}
       </div>
     </sc-for>
     <div style="display:flex;align-items:center;gap:8px;margin-left:auto">
+        <!-- ＋ new local terminal (the system this app runs on) -->
+        <span onClick="{{ newLocalTerminal }}" title="New local terminal (this system)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700);align-self:center;flex:none;font-size:17px;line-height:1" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">＋</span>
+        <!-- tab list dropdown (view all open terminals) -->
+        <span style="position:relative;display:flex;align-items:center;flex:none">
+          <span onClick="{{ toggleTabList }}" title="All open terminals" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ tabListIconC }};align-self:center" style-hover="background:var(--color-neutral-200)">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5h10M3 8h10M3 11.5h10"></path></svg>
+          </span>
+          <sc-if value="{{ tabListOpen }}" hint-placeholder-val="{{ false }}">
+            <div class="pop pop-tr" style="position:absolute;top:100%;right:0;z-index:66;width:250px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);display:flex;flex-direction:column">
+              <div style="padding:8px"><input class="input" type="text" placeholder="Filter" value="{{ tabListQuery }}" onChange="{{ onTabListQuery }}" style="height:26px;font-size:12px"></div>
+              <div style="max-height:280px;overflow-y:auto;padding-bottom:4px">
+                <sc-for list="{{ tabListItems }}" as="tl" hint-placeholder-count="5">
+                  <div onClick="{{ tl.go }}" style="display:flex;align-items:center;gap:9px;padding:6px 12px;cursor:pointer;font-size:12.5px;font-weight:{{ tl.w }};color:{{ tl.c }}" style-hover="background:var(--color-accent-100)">
+                    <span style="width:8px;height:8px;border-radius:2px;background:{{ tl.dot }};flex:none"></span>
+                    <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace">{{ tl.name }}</span>
+                    <span style="font-size:10.5px;color:var(--color-neutral-500)">{{ tl.sub }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+        </span>
+        <div style="display:flex;align-items:center;gap:5px;flex:none">
+          <span onClick="{{ toggleSearch }}" title="Find in log (opens bottom Find bar)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ searchIconC }}" style-hover="background:var(--color-neutral-200)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg>
+          </span>
+          <span onClick="{{ toggleSyncInput }}" title="{{ syncTip }}" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ syncIconC }}" style-hover="background:var(--color-neutral-200)">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="6" height="5" rx="1"></rect><rect x="8.5" y="8.5" width="6" height="5" rx="1"></rect><path d="M8 5h4v2M8 11H4V9"></path></svg>
+          </span>
+          <span onClick="{{ toggleSender }}" title="Sender (timed data sending)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ senderIconC }}" style-hover="background:var(--color-neutral-200)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 8l11-5-3 5 3 5z"></path><path d="M13 3L7.5 8"></path></svg>
+          </span>
+          <span style="position:relative;display:flex;align-items:center">
+            <span onClick="{{ toggleRec }}" title="{{ recTip }}" style="display:flex;align-items:center;gap:5px;height:26px;padding:0 8px;border:1px solid {{ recBorder }};border-radius:var(--radius-md) 0 0 var(--radius-md);cursor:pointer;font-size:11.5px;color:{{ recColor }};user-select:none" style-hover="background:var(--color-neutral-200)">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ recDot }}"></span>{{ recWord }}
+            </span>
+            <span onClick="{{ toggleRecPop }}" title="Log directory" style="display:grid;place-items:center;width:18px;height:26px;border:1px solid {{ recBorder }};border-left:none;border-radius:0 var(--radius-md) var(--radius-md) 0;cursor:pointer;color:var(--color-neutral-600);font-size:9px" style-hover="background:var(--color-neutral-200)">▾</span>
+            <sc-if value="{{ recPopOpen }}" hint-placeholder-val="{{ false }}">
+              <div class="pop pop-tr" style="position:absolute;top:100%;right:0;z-index:60;width:290px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:12px;display:flex;flex-direction:column;gap:8px">
+                <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600)">Log directory</div>
+                <div style="display:flex;gap:6px">
+                  <input class="input" type="text" value="{{ recDir }}" onChange="{{ onRecDir }}" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;flex:1">
+                  <button class="btn btn-secondary" style="padding-block:4px;font-size:12px;flex:none" onClick="{{ browseRecDir }}">Browse…</button>
+                </div>
+                <sc-if value="{{ recDirListOn }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
+                    <sc-for list="{{ recDirOpts }}" as="rd" hint-placeholder-count="4">
+                      <div onClick="{{ rd.pick }}" style="padding:6px 10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;background:{{ rd.bg }}" style-hover="background:var(--color-accent-100)">{{ rd.path }}</div>
+                    </sc-for>
+                  </div>
+                </sc-if>
+                <div style="display:flex;gap:6px">
+                  <button class="btn btn-secondary" style="padding-block:4px;font-size:12px" onClick="{{ resetRecDir }}">Use default</button>
+                  <button class="btn btn-primary" style="padding-block:4px;font-size:12px;margin-left:auto" onClick="{{ toggleRecPop }}">Done</button>
+                </div>
+              </div>
+            </sc-if>
+          </span>
+          <span onClick="{{ exportLog }}" title="Export full log" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200)">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"></path></svg>
+          </span>
+        </div>
       <span style="font-size:12px;color:var(--color-neutral-600)">{{ sessionCount }}</span>
       <span onClick="{{ toggleDark }}" title="{{ darkTip }}" style="display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200)">
         <span style="font-size:14px">{{ darkIcon }}</span>
@@ -202,68 +264,6 @@ body.wl-dragging .wb-grid{transition:none}
             <span onClick="{{ tb.close }}" style="color:var(--color-neutral-500);padding:0 2px;border-radius:2px" style-hover="color:var(--color-accent-2-700);background:var(--color-neutral-200)">×</span>
           </div>
         </sc-for>
-        </div>
-        <!-- ＋ new local terminal (the system this app runs on) -->
-        <span onClick="{{ newLocalTerminal }}" title="New local terminal (this system)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700);align-self:center;flex:none;font-size:17px;line-height:1" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">＋</span>
-        <!-- tab list dropdown (view all open terminals) -->
-        <span style="position:relative;display:flex;align-items:center;flex:none">
-          <span onClick="{{ toggleTabList }}" title="All open terminals" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ tabListIconC }};align-self:center" style-hover="background:var(--color-neutral-200)">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4.5h10M3 8h10M3 11.5h10"></path></svg>
-          </span>
-          <sc-if value="{{ tabListOpen }}" hint-placeholder-val="{{ false }}">
-            <div class="pop pop-tr" style="position:absolute;top:100%;right:0;z-index:66;width:250px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);display:flex;flex-direction:column">
-              <div style="padding:8px"><input class="input" type="text" placeholder="Filter" value="{{ tabListQuery }}" onChange="{{ onTabListQuery }}" style="height:26px;font-size:12px"></div>
-              <div style="max-height:280px;overflow-y:auto;padding-bottom:4px">
-                <sc-for list="{{ tabListItems }}" as="tl" hint-placeholder-count="5">
-                  <div onClick="{{ tl.go }}" style="display:flex;align-items:center;gap:9px;padding:6px 12px;cursor:pointer;font-size:12.5px;font-weight:{{ tl.w }};color:{{ tl.c }}" style-hover="background:var(--color-accent-100)">
-                    <span style="width:8px;height:8px;border-radius:2px;background:{{ tl.dot }};flex:none"></span>
-                    <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:ui-monospace,Menlo,monospace">{{ tl.name }}</span>
-                    <span style="font-size:10.5px;color:var(--color-neutral-500)">{{ tl.sub }}</span>
-                  </div>
-                </sc-for>
-              </div>
-            </div>
-          </sc-if>
-        </span>
-        <div style="display:flex;align-items:center;gap:5px;margin-left:auto;padding-left:8px;flex:none">
-          <span onClick="{{ toggleSearch }}" title="Find in log (opens bottom Find bar)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ searchIconC }}" style-hover="background:var(--color-neutral-200)">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5L14 14"></path></svg>
-          </span>
-          <span onClick="{{ toggleSyncInput }}" title="{{ syncTip }}" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ syncIconC }}" style-hover="background:var(--color-neutral-200)">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="6" height="5" rx="1"></rect><rect x="8.5" y="8.5" width="6" height="5" rx="1"></rect><path d="M8 5h4v2M8 11H4V9"></path></svg>
-          </span>
-          <span onClick="{{ toggleSender }}" title="Sender (timed data sending)" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:{{ senderIconC }}" style-hover="background:var(--color-neutral-200)">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 8l11-5-3 5 3 5z"></path><path d="M13 3L7.5 8"></path></svg>
-          </span>
-          <span style="position:relative;display:flex;align-items:center">
-            <span onClick="{{ toggleRec }}" title="{{ recTip }}" style="display:flex;align-items:center;gap:5px;height:26px;padding:0 8px;border:1px solid {{ recBorder }};border-radius:var(--radius-md) 0 0 var(--radius-md);cursor:pointer;font-size:11.5px;color:{{ recColor }};user-select:none" style-hover="background:var(--color-neutral-200)">
-              <span style="width:7px;height:7px;border-radius:50%;background:{{ recDot }}"></span>{{ recWord }}
-            </span>
-            <span onClick="{{ toggleRecPop }}" title="Log directory" style="display:grid;place-items:center;width:18px;height:26px;border:1px solid {{ recBorder }};border-left:none;border-radius:0 var(--radius-md) var(--radius-md) 0;cursor:pointer;color:var(--color-neutral-600);font-size:9px" style-hover="background:var(--color-neutral-200)">▾</span>
-            <sc-if value="{{ recPopOpen }}" hint-placeholder-val="{{ false }}">
-              <div class="pop pop-tr" style="position:absolute;top:100%;right:0;z-index:60;width:290px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:12px;display:flex;flex-direction:column;gap:8px">
-                <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600)">Log directory</div>
-                <div style="display:flex;gap:6px">
-                  <input class="input" type="text" value="{{ recDir }}" onChange="{{ onRecDir }}" style="font-family:ui-monospace,Menlo,monospace;font-size:12px;flex:1">
-                  <button class="btn btn-secondary" style="padding-block:4px;font-size:12px;flex:none" onClick="{{ browseRecDir }}">Browse…</button>
-                </div>
-                <sc-if value="{{ recDirListOn }}" hint-placeholder-val="{{ false }}">
-                  <div style="display:flex;flex-direction:column;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden">
-                    <sc-for list="{{ recDirOpts }}" as="rd" hint-placeholder-count="4">
-                      <div onClick="{{ rd.pick }}" style="padding:6px 10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;cursor:pointer;background:{{ rd.bg }}" style-hover="background:var(--color-accent-100)">{{ rd.path }}</div>
-                    </sc-for>
-                  </div>
-                </sc-if>
-                <div style="display:flex;gap:6px">
-                  <button class="btn btn-secondary" style="padding-block:4px;font-size:12px" onClick="{{ resetRecDir }}">Use default</button>
-                  <button class="btn btn-primary" style="padding-block:4px;font-size:12px;margin-left:auto" onClick="{{ toggleRecPop }}">Done</button>
-                </div>
-              </div>
-            </sc-if>
-          </span>
-          <span onClick="{{ exportLog }}" title="Export full log" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-600)" style-hover="background:var(--color-neutral-200)">
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"></path></svg>
-          </span>
         </div>
       </div>
 
@@ -654,14 +654,15 @@ body.wl-dragging .wb-grid{transition:none}
   </div>
   </sc-if>
 
-  <!-- ═══ SETTINGS ═══ -->
+  <!-- ═══ SETTINGS (modal — closes only via ×) ═══ -->
   <sc-if value="{{ viewSettings }}" hint-placeholder-val="{{ false }}">
-  <div style="flex:1;min-height:0;overflow-y:auto;padding:24px 36px">
-    <div style="max-width:680px">
-      <div style="display:flex;align-items:baseline;gap:14px">
-        <h2 style="font-size:26px;margin-bottom:4px">AI Operator settings</h2>
-        <span onClick="{{ goTerminal }}" style="font-size:12.5px;color:var(--color-accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">← back to terminal</span>
+  <div class="dialog-backdrop" style="z-index:74">
+    <div class="dialog" style="width:740px;max-width:96vw;padding:0;overflow:hidden;display:flex;flex-direction:column;max-height:90vh" onClick="{{ stop }}">
+      <div style="display:flex;align-items:center;padding:11px 18px;border-bottom:1px solid var(--color-divider);background:var(--color-neutral-100)">
+        <span style="font-family:var(--font-heading);font-weight:600;font-size:15px">Settings</span>
+        <span onClick="{{ closeSettings }}" title="Close" style="margin-left:auto;cursor:pointer;color:var(--color-neutral-600);font-size:16px;line-height:1;padding:2px 6px;border-radius:var(--radius-md)" style-hover="background:var(--color-neutral-200);color:var(--color-text)">×</span>
       </div>
+      <div style="flex:1;min-height:0;overflow-y:auto;padding:18px 22px">
 
       <div class="field" style="margin-bottom:22px">
         <label>Default mode for new attachments</label>
@@ -717,6 +718,10 @@ body.wl-dragging .wb-grid{transition:none}
       <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--color-accent-2-100);border-radius:var(--radius-md);font-size:12.5px;color:var(--color-accent-2-800)">
         <span style="width:6px;height:6px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
         Current mode: <strong>{{ modeWord }}</strong> — {{ modeNote }}
+      </div>
+      </div>
+      <div style="display:flex;justify-content:flex-end;padding:10px 16px;border-top:1px solid var(--color-divider)">
+        <button class="btn btn-primary" style="min-width:90px" onClick="{{ closeSettings }}">Ok</button>
       </div>
     </div>
   </div>
@@ -1411,6 +1416,7 @@ class Component extends DCLogic {
       tsMargin: true,
       termWrap: true,
       resetOpen: false,
+      settingsOpen: false,
       askDlg: { open: false, title: '', value: '' },
       chatModel: 'gpt-4o-mini',
       aiPrompts: [],        // quick prompts sent to the AI agent
@@ -3136,7 +3142,7 @@ class Component extends DCLogic {
     const acts = [
       { label: 'New Session…', hint: 'Alt+N', fn: () => this.setState({ dialogOpen: true }) },
       { label: 'Open Session Manager', fn: () => this.setState({ view: 'sessions' }) },
-      { label: 'Settings', fn: () => this.setState({ view: 'settings' }) },
+      { label: 'Settings', fn: () => this.setState({ settingsOpen: true }) },
       { label: 'Toggle Dark Mode', fn: () => this.setState(s => ({ dark: !s.dark })) },
       { label: this.state.recActive ? 'Stop Log Recording' : 'Start Log Recording', fn: () => this.toggleRec() },
       { label: 'Export Log', fn: () => this.exportLog() },
@@ -3710,7 +3716,7 @@ class Component extends DCLogic {
       { label: 'Open Log File', fn: () => this.exportLog(), dis: !this.state.recActive },
       { label: 'Open Log Folder', fn: () => this.setState({ recPopOpen: true, openMenu: null, openSub: null }) },
       'div',
-      { label: 'Settings…', fn: () => this.setState({ view: 'settings' }) }
+      { label: 'Settings…', fn: () => this.setState({ settingsOpen: true }) }
     ].map(x => x === 'div' ? DIV : { isItem: true, divider: false, label: x.label, hint: '', c: x.dis ? DIS : 'var(--color-text)', cursor: x.dis ? 'default' : 'pointer', hasSub: false, subItems: [], subOpen: false, act: x.dis ? (() => {}) : act(x.fn), enter: () => {} });
 
     const flyout = (labels) => labels.map(l => ({ isItem: true, divider: false, label: l, hint: '', c: DIS, cursor: 'default', hasSub: false, subItems: [], subOpen: false, act: () => {}, enter: () => {} }));
@@ -3730,7 +3736,7 @@ class Component extends DCLogic {
         m('Save Selection As…', null, ''),
         DIV,
         m('Log', null, '', { sub: logSub }),
-        m('Preferences', () => this.setState({ view: 'settings' }), '', { sub: flyout(['Terminal', 'Appearance', 'AI Operator']) }),
+        m('Preferences', () => this.setState({ settingsOpen: true }), ''),
         DIV,
         m('Close View', () => this.closeTab(this.state.activeTab), 'Ctrl+Shift+W'),
         m('Close All Views', () => this.setState({ openTabs: [], activeTab: null }), ''),
@@ -4465,7 +4471,9 @@ class Component extends DCLogic {
       ctxDelete: () => { if (st.ctx.id) this.deleteSession(st.ctx.id); },
       ctxOpenSession: () => { if (st.ctx.id) { this.openSession(st.ctx.id); this.setState({ ctx: { open: false, x: 0, y: 0, id: null } }); } },
       // views
-      viewWorkbench: st.view === 'workbench', viewSessions: st.view === 'sessions', viewSettings: st.view === 'settings',
+      viewWorkbench: st.view === 'workbench', viewSessions: st.view === 'sessions',
+      viewSettings: st.settingsOpen,
+      closeSettings: () => this.setState({ settingsOpen: false }),
       goTerminal: () => this.setState({ view: 'workbench' }),
       sessionCount: st.sessions.length + ' sessions · ' + liveCount + ' live',
       // tree
@@ -4800,7 +4808,7 @@ class Component extends DCLogic {
       // sessions view
       mgrRows,
       // settings
-      guards, model: st.model, onModel: (e) => this.setState({ model: e.target.value }, () => this.persistModelCfg()),
+      guards, model: st.model === '__chat__' ? 'chat' : st.model, onModel: (e) => { const v = e.target.value.trim(); this.setState({ model: v === 'chat' ? '__chat__' : v }, () => this.persistModelCfg()); },
       chatModel: st.chatModel, onChatModel: (e) => this.setState({ chatModel: e.target.value }, () => this.saveConfig()),
       timeout: st.timeout, onTimeout: (e) => this.setState({ timeout: e.target.value }),
       cfgPath: st.cfgPath || '',
@@ -4827,7 +4835,7 @@ class Component extends DCLogic {
       dlgIsShell: st.dlg.type === 'Shell',
       dlgIsSerial: st.dlg.type === 'Serial',
       dlgIsOther: false,
-      dlgEditDefaults: () => this.setState({ dialogOpen: false, view: 'settings' }),
+      dlgEditDefaults: () => this.setState({ dialogOpen: false, settingsOpen: true }),
       dlgSystem: st.dlg.system, onDlgSystem: setDlg('system'),
       dlgSysmonBg: st.dlg.sysmon ? 'var(--color-accent)' : 'var(--color-neutral-400)',
       dlgSysmonKnob: st.dlg.sysmon ? '16px' : '2px',
