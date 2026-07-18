@@ -990,6 +990,20 @@ body.wl-dragging .wb-grid{transition:none}
     </div>
   </sc-if>
 
+  <!-- ═══ TEXT PROMPT (window.prompt replacement — WKWebView has none) ═══ -->
+  <sc-if value="{{ askOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" style="z-index:92">
+      <div class="dialog" style="width:380px" onClick="{{ stop }}">
+        <div class="dialog-title" style="font-size:15px">{{ askTitle }}</div>
+        <input ref="{{ askRef }}" class="input" type="text" value="{{ askValue }}" onChange="{{ onAskValue }}" onKeyDown="{{ onAskKey }}" style="font-family:ui-monospace,Menlo,monospace;font-size:13px">
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" onClick="{{ askCancel }}">Cancel</button>
+          <button class="btn btn-primary" onClick="{{ askConfirm }}">Ok</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- ═══ FACTORY RESET CONFIRM ═══ -->
   <sc-if value="{{ resetOpen }}" hint-placeholder-val="{{ false }}">
     <div class="dialog-backdrop" style="z-index:88">
@@ -1212,9 +1226,6 @@ body.wl-dragging .wb-grid{transition:none}
           <!-- left: key list + batch toolbar -->
           <div style="display:flex;flex-direction:column;border-right:1px solid var(--color-divider);background:var(--color-surface)">
             <div style="flex:1;overflow-y:auto;padding:5px 0">
-              <sc-if value="{{ okEmpty }}" hint-placeholder-val="{{ false }}">
-                <div style="padding:18px 16px;font-size:12.5px;color:var(--color-neutral-500);line-height:1.7">No OneKeys yet.<br>Use “+” at the bottom left to add a credential.</div>
-              </sc-if>
               <sc-for list="{{ okList }}" as="k" hint-placeholder-count="5">
                 <div onClick="{{ k.pick }}" style="display:flex;align-items:center;gap:9px;padding:8px 16px;cursor:pointer;background:{{ k.bg }};border-left:2px solid {{ k.br }}" style-hover="background:var(--color-neutral-200)">
                   <span style="width:7px;height:7px;border-radius:50%;background:var(--color-neutral-500);flex:none"></span>
@@ -1231,9 +1242,6 @@ body.wl-dragging .wb-grid{transition:none}
           </div>
           <!-- right: credential form -->
           <div style="padding:16px 22px;display:flex;flex-direction:column;gap:13px;overflow-y:auto">
-            <sc-if value="{{ okEmpty }}" hint-placeholder-val="{{ false }}">
-              <div style="flex:1;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px;text-align:center;line-height:1.8">No OneKeys yet.<br>Create one with “+” on the left, then fill in username / password / key here.</div>
-            </sc-if>
             <sc-if value="{{ okHasSel }}" hint-placeholder-val="{{ true }}">
               <div class="field" style="margin:0"><label>Username:</label>
                 <input class="input" type="text" value="{{ okUser }}" onChange="{{ onOkUser }}" style="font-family:ui-monospace,Menlo,monospace;font-size:13px">
@@ -1274,9 +1282,6 @@ body.wl-dragging .wb-grid{transition:none}
                     <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600);border-right:1px solid var(--color-divider)">Challenge</div>
                     <div style="padding:6px 12px;font-size:12px;color:var(--color-neutral-600)">Response</div>
                   </div>
-                  <sc-if value="{{ okKbiEmpty }}" hint-placeholder-val="{{ true }}">
-                    <div style="padding:12px;font-size:12px;color:var(--color-neutral-500)">(Empty — turn on Password above to auto-answer the password prompt, or use Modify to add a custom response)</div>
-                  </sc-if>
                   <sc-for list="{{ okKbiRows }}" as="kb" hint-placeholder-count="2">
                     <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid var(--color-divider)">
                       <div style="padding:7px 12px;font-size:12.5px;font-family:ui-monospace,Menlo,monospace;border-right:1px solid var(--color-divider)">{{ kb.challenge }}</div>
@@ -1296,12 +1301,9 @@ body.wl-dragging .wb-grid{transition:none}
           <div style="min-height:440px;display:grid;place-items:center;color:var(--color-neutral-500);font-size:13px">{{ okTabHint }}</div>
         </sc-if>
         <!-- bottom bar -->
-        <div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-top:1px solid var(--color-divider)">
-          <span style="font-size:12.5px;color:var(--color-accent-2-700);display:flex;align-items:center;gap:7px">🔒 Credentials are stored on this machine only — used to auto-answer the server's password prompt.</span>
-          <div style="display:flex;gap:8px;margin-left:auto">
-            <button class="btn btn-secondary" style="min-width:96px" onClick="{{ closeOneKey }}">Cancel</button>
-            <button class="btn btn-primary" style="min-width:96px" onClick="{{ saveOneKey }}">Ok</button>
-          </div>
+        <div style="display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:11px 16px;border-top:1px solid var(--color-divider)">
+          <button class="btn btn-secondary" style="min-width:96px" onClick="{{ closeOneKey }}">Cancel</button>
+          <button class="btn btn-primary" style="min-width:96px" onClick="{{ saveOneKey }}">Ok</button>
         </div>
       </div>
     </div>
@@ -1360,6 +1362,7 @@ class Component extends DCLogic {
       tsMargin: true,
       termWrap: true,
       resetOpen: false,
+      askDlg: { open: false, title: '', value: '' },
       highlights: [],
       cmdHistories: {},
       cmdHistH: 170,
@@ -1445,6 +1448,7 @@ class Component extends DCLogic {
     this.hoverTimer = null;
     this.pendingGoto = null;
     this.paletteRef = React.createRef();
+    this.askRef = React.createRef();
     this.mkLine = { p, o };
   }
 
@@ -1496,6 +1500,20 @@ class Component extends DCLogic {
       logDir: st.recDir,
       termWrap: st.termWrap !== false
     };
+  }
+
+  // In-app text prompt — window.prompt does NOT work in Tauri's WKWebView on
+  // macOS (returns null), which silently broke every add/rename flow. cb gets
+  // the entered string, or is not called at all on cancel.
+  askText(title, initial, cb) {
+    this._askCb = cb;
+    this.setState({ askDlg: { open: true, title, value: initial == null ? '' : String(initial) } });
+  }
+
+  askOk() {
+    const v = this.state.askDlg.value;
+    const cb = this._askCb; this._askCb = null;
+    this.setState({ askDlg: { open: false, title: '', value: '' } }, () => { if (cb) cb(v); });
   }
 
   // Dynamic line-wrap toggle: refit every pane and persist the choice.
@@ -1727,6 +1745,16 @@ class Component extends DCLogic {
       if (pane.ptyId) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: d }).catch(() => {});
     });
     term.onResize(({ cols, rows }) => { if (pane.ptyId) window.__TAURI__.invoke('pty_resize', { id: pane.ptyId, cols, rows }).catch(() => {}); });
+    // hover ✕ in the corner closes THIS pane (visible only when split)
+    const closeBtn = document.createElement('div');
+    closeBtn.textContent = '×';
+    closeBtn.title = 'Close this pane';
+    closeBtn.style.cssText = 'position:absolute;top:4px;right:16px;z-index:7;width:20px;height:20px;display:none;place-items:center;font:14px/1 sans-serif;color:#8f8b89;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.15);border-radius:4px;cursor:pointer';
+    closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#fff'; closeBtn.style.background = 'rgba(229,72,77,.65)'; });
+    closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#8f8b89'; closeBtn.style.background = 'rgba(0,0,0,.35)'; });
+    closeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.closePaneById(pid); });
+    el.appendChild(closeBtn);
+    pane.closeBtn = closeBtn;
     // focusing / clicking a pane makes it the active one
     el.addEventListener('mousedown', () => this.setActivePane(pid));
     try { if (term.textarea) term.textarea.addEventListener('focus', () => this.setActivePane(pid)); } catch (e) {}
@@ -1788,6 +1816,7 @@ class Component extends DCLogic {
       p.el.style.boxShadow = multi
         ? ('inset 0 0 0 1px ' + (p.pid === this.activePid ? 'rgba(63,181,214,.55)' : 'rgba(255,255,255,.07)'))
         : 'none';
+      if (p.closeBtn) p.closeBtn.style.display = multi ? 'grid' : 'none';
     }
   }
 
@@ -1861,23 +1890,31 @@ class Component extends DCLogic {
     else if (hit.parent.a === hit.node) hit.parent.a = split;
     else hit.parent.b = split;
     this.rebuildLayout();
-    // the new pane opens ANOTHER connection to the same session
-    this.connectPane(fresh, this.sess(cur.sessId) || this.sess(this.state.activeTab));
     this.setActivePane(fresh.pid);
+    // fit FIRST so the new PTY starts at the pane's real size — connecting at
+    // the default 80 cols and refitting after garbled the first prompt lines
+    setTimeout(() => {
+      this.fitPane(fresh);
+      this.connectPane(fresh, this.sess(cur.sessId) || this.sess(this.state.activeTab));
+    }, 50);
   }
 
-  closeActivePane() {
+  closeActivePane() { this.closePaneById(this.activePid); }
+
+  closePaneById(pid) {
     if (!this.panes || this.panes.size <= 1) return;
-    const cur = this.pane(); if (!cur) return;
-    const hit = this.findLeaf(this.layout, cur.pid, null); if (!hit || !hit.parent) return;
+    const cur = this.pane(pid); if (!cur) return;
+    const hit = this.findLeaf(this.layout, pid, null); if (!hit || !hit.parent) return;
     const sibling = hit.parent.a === hit.node ? hit.parent.b : hit.parent.a;
     const gp = this.findParentOf(this.layout, hit.parent);
     if (!gp) this.layout = sibling;
     else if (gp.a === hit.parent) gp.a = sibling;
     else gp.b = sibling;
     this.destroyPane(cur);
-    const first = this.firstLeaf(this.layout);
-    if (first) this.activePid = first.pane.pid;
+    if (!this.panes.has(this.activePid)) {
+      const first = this.firstLeaf(this.layout);
+      if (first) this.activePid = first.pane.pid;
+    }
     this.rebuildLayout();
     this.forceUpdate();
   }
@@ -2152,6 +2189,18 @@ class Component extends DCLogic {
     );
   }
 
+  // Broadcast to EVERY pane's PTY (Sender "All Sessions"). Returns true when
+  // at least one pane received the data.
+  writeToAllPanes(data) {
+    let n = 0;
+    if (this.panes && window.__TAURI__) {
+      for (const p of this.panes.values()) {
+        if (p.ptyId) { window.__TAURI__.invoke('pty_write', { id: p.ptyId, data }).catch(() => {}); n++; }
+      }
+    }
+    return n > 0;
+  }
+
   // Write to the ACTIVE pane's PTY (AI Operator, quick commands, sender…).
   writeToPty(data) {
     const p = this.pane();
@@ -2374,6 +2423,7 @@ class Component extends DCLogic {
     }
     const c = this.chatRef.current; if (c) c.scrollTop = c.scrollHeight;
     if (this.state.paletteOpen && this.paletteRef.current) this.paletteRef.current.focus();
+    if (this.state.askDlg.open && this.askRef.current && document.activeElement !== this.askRef.current) this.askRef.current.focus();
   }
 
   sess(id) { return this.state.sessions.find(s => s.id === id); }
@@ -2465,8 +2515,10 @@ class Component extends DCLogic {
       ]);
       this.recordCmd(id, payloadRaw); // record what actually goes to the terminal
     });
-    // real terminal: write the line to the live PTY so it actually reaches the shell/host
-    this.writeToPty(payloadRaw + '\n');
+    // real terminal: "All Sessions" broadcasts to every split pane's PTY;
+    // otherwise only the active pane receives the line
+    if (sd.target === 'all') { if (!this.writeToAllPanes(payloadRaw + '\n')) this.writeToPty(payloadRaw + '\n'); }
+    else this.writeToPty(payloadRaw + '\n');
     this.recordCmd(this.xtermSessId || this.state.activeTab, payloadRaw);
     this.setState(s => ({ sender: Object.assign({}, s.sender, { sent: s.sender.sent + 1 }) }), () => {
       const ms = Math.max(50, Math.round(parseFloat(this.state.sender.interval || '1') * 1000));
@@ -3333,21 +3385,20 @@ class Component extends DCLogic {
     const key = this.state.oneKeys.find(k => k.id === this.state.activeKey); if (!key) return;
     const sysKeys = ['linux', 'mac', 'win'];
     const sk = sysKeys[rowIdx] || 'linux';
-    let v = null;
-    try { v = window.prompt('Identity file (' + ['Linux', 'macOS', 'Windows'][rowIdx || 0] + '), e.g. ~/.ssh/id_ed25519:', (key.idFiles && key.idFiles[sk]) || ''); } catch (e) {}
-    if (v == null) return;
-    this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { idFiles: Object.assign({}, k.idFiles, { [sk]: v.trim() }) }) : k) }));
+    this.askText('Identity file (' + ['Linux', 'macOS', 'Windows'][rowIdx || 0] + '), e.g. ~/.ssh/id_ed25519', (key.idFiles && key.idFiles[sk]) || '', (v) => {
+      this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { idFiles: Object.assign({}, k.idFiles, { [sk]: v.trim() }) }) : k) }), () => this.persistOneKeys());
+    });
   }
 
   // Add a custom keyboard-interactive challenge/response pair.
   okAddKbi() {
     const key = this.state.oneKeys.find(k => k.id === this.state.activeKey); if (!key) return;
-    let c = null, r = null;
-    try { c = window.prompt('Challenge (server prompt text, e.g. "verification code:"):', ''); } catch (e) {}
-    if (c == null || !c.trim()) return;
-    try { r = window.prompt('Response (text to send automatically):', ''); } catch (e) {}
-    if (r == null) return;
-    this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { kbi: (k.kbi || []).concat({ challenge: c.trim(), response: r }) }) : k) }));
+    this.askText('Challenge (server prompt text, e.g. "verification code:")', '', (c) => {
+      if (!c.trim()) return;
+      this.askText('Response (text to send automatically)', '', (r) => {
+        this.setState(s => ({ oneKeys: s.oneKeys.map(k => k.id === s.activeKey ? Object.assign({}, k, { kbi: (k.kbi || []).concat({ challenge: c.trim(), response: r }) }) : k) }), () => this.persistOneKeys());
+      });
+    });
   }
 
   renderVals() {
@@ -3771,20 +3822,18 @@ class Component extends DCLogic {
       okKbiAdd: () => this.okAddKbi(),
       okRename: () => {
         const k = st.oneKeys.find(x => x.id === st.activeKey); if (!k) return;
-        let v = null; try { v = window.prompt('OneKey name:', k.name); } catch (e) {}
-        if (v == null || !v.trim()) return;
-        const name = this.uniqueKeyName(v, st.activeKey); // never collide
-        this.setState(s => ({ oneKeys: s.oneKeys.map(x => x.id === s.activeKey ? Object.assign({}, x, { name }) : x) }), () => this.persistOneKeys());
+        this.askText('OneKey name', k.name, (v) => {
+          if (!v.trim()) return;
+          const name = this.uniqueKeyName(v, this.state.activeKey); // never collide
+          this.setState(s => ({ oneKeys: s.oneKeys.map(x => x.id === s.activeKey ? Object.assign({}, x, { name }) : x) }), () => this.persistOneKeys());
+        });
       },
       okAdd: () => {
-        // Ask for an alias like WindTerm's "Create OneKey". If the prompt isn't
-        // available, fall back to a generated unique name (rename afterwards).
-        let v, prompted = false;
-        try { v = window.prompt('Enter a name for the new OneKey:', this.uniqueKeyName('onekey')); prompted = true; } catch (e) {}
-        if (prompted && v === null) return; // cancelled
-        const name = this.uniqueKeyName(prompted ? v : '');
-        const id = 'k' + (++this.seq);
-        this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name, user: '', pass: '', pwOn: true, idFiles: {}, kbi: [] }), activeKey: id, okKeySel: 0 }), () => this.persistOneKeys());
+        this.askText('Name for the new OneKey', this.uniqueKeyName('onekey'), (v) => {
+          const name = this.uniqueKeyName(v);
+          const id = 'k' + (++this.seq);
+          this.setState(s => ({ oneKeys: s.oneKeys.concat({ id, name, user: '', pass: '', pwOn: true, idFiles: {}, kbi: [] }), activeKey: id, okKeySel: 0 }), () => this.persistOneKeys());
+        });
       },
       okRemove: () => this.setState(s => { const rest = s.oneKeys.filter(k => k.id !== s.activeKey); this.persistOneKeys(rest); return { oneKeys: rest, activeKey: rest[0] ? rest[0].id : null }; }),
       okDuplicate: () => {
@@ -3851,12 +3900,13 @@ class Component extends DCLogic {
       qmGroups: st.quickGroups.map(g => ({ v: g, label: g })),
       onQmGroup: (e) => { const v = e.target.value; this.setState(s => ({ quickMgr: Object.assign({}, s.quickMgr, { group: v, sel: 0 }) })); },
       qmAddGroup: () => {
-        let v = null; try { v = window.prompt('New group name:', ''); } catch (e) {}
-        if (v == null || !v.trim()) return; v = v.trim();
-        this.setState(s => ({
-          quickGroups: s.quickGroups.includes(v) ? s.quickGroups : s.quickGroups.concat(v),
-          quickMgr: Object.assign({}, s.quickMgr, { group: v, sel: 0 })
-        }));
+        this.askText('New group name', '', (raw) => {
+          const v = raw.trim(); if (!v) return;
+          this.setState(s => ({
+            quickGroups: s.quickGroups.includes(v) ? s.quickGroups : s.quickGroups.concat(v),
+            quickMgr: Object.assign({}, s.quickMgr, { group: v, sel: 0 })
+          }));
+        });
       },
       qmRemoveGroup: () => {
         if (st.quickGroups.length <= 1) return;
@@ -3873,13 +3923,14 @@ class Component extends DCLogic {
       qmRemoveGroupC: st.quickGroups.length > 1 ? 'var(--color-neutral-600)' : 'var(--color-neutral-400)',
       qmRenameGroup: () => {
         const g = st.quickMgr.group;
-        let v = null; try { v = window.prompt('Group name:', g); } catch (e) {}
-        if (v == null || !v.trim() || v.trim() === g) return; v = v.trim();
-        this.setState(s => ({
-          quickGroups: s.quickGroups.map(x => x === g ? v : x),
-          quickCmds: s.quickCmds.map(q => (q.group || 'Quick') === g ? Object.assign({}, q, { group: v }) : q),
-          quickMgr: Object.assign({}, s.quickMgr, { group: v })
-        }));
+        this.askText('Group name', g, (raw) => {
+          const v = raw.trim(); if (!v || v === g) return;
+          this.setState(s => ({
+            quickGroups: s.quickGroups.map(x => x === g ? v : x),
+            quickCmds: s.quickCmds.map(q => (q.group || 'Quick') === g ? Object.assign({}, q, { group: v }) : q),
+            quickMgr: Object.assign({}, s.quickMgr, { group: v })
+          }));
+        });
       },
       qmList: this.qmCmds().map((q, i) => {
         const selIdx = Math.max(0, Math.min(st.quickMgr.sel, this.qmCmds().length - 1));
@@ -4107,6 +4158,18 @@ class Component extends DCLogic {
       // neutrals lifted a step for legibility (material-weight hierarchy)
       themeVars: st.dark ? '--color-bg:#171615;--color-surface:#211f1e;--color-text:#eceae8;--color-divider:rgba(255,255,255,.09);--color-neutral-100:#1d1c1b;--color-neutral-200:#2a2827;--color-neutral-300:#3a3836;--color-neutral-400:#726e6b;--color-neutral-500:#928e8b;--color-neutral-600:#aca8a5;--color-neutral-700:#c9c5c3;--color-neutral-800:#e0dcda;--color-accent-100:rgba(0,150,190,.20);--color-accent-2-100:rgba(214,0,108,.20)' : '',
       toggleDark: () => this.setState(s => ({ dark: !s.dark })),
+      // in-app text prompt
+      askOpen: st.askDlg.open,
+      askTitle: st.askDlg.title,
+      askValue: st.askDlg.value,
+      askRef: this.askRef,
+      onAskValue: (e) => { const v = e.target.value; this.setState(s => ({ askDlg: Object.assign({}, s.askDlg, { value: v }) })); },
+      onAskKey: (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); this.askOk(); }
+        else if (e.key === 'Escape') { this._askCb = null; this.setState({ askDlg: { open: false, title: '', value: '' } }); }
+      },
+      askCancel: () => { this._askCb = null; this.setState({ askDlg: { open: false, title: '', value: '' } }); },
+      askConfirm: () => this.askOk(),
       // factory reset (Help menu)
       resetOpen: st.resetOpen,
       closeReset: () => this.setState({ resetOpen: false }),
@@ -4398,11 +4461,11 @@ class Component extends DCLogic {
       onModelSel: (e) => {
         const v = e.target.value;
         if (v === '__add__') {
-          let name = '';
-          try { name = window.prompt('New model name (e.g. glm-4-plus):', '') || ''; } catch (er) {}
-          name = name.trim();
-          if (name) this.setState(s => ({ models: s.models.includes(name) ? s.models : s.models.concat(name), model: name }));
-          else this.forceUpdate();
+          this.forceUpdate(); // keep the select on the current model meanwhile
+          this.askText('New model name (e.g. glm-4-plus)', '', (raw) => {
+            const name = raw.trim();
+            if (name) this.setState(s => ({ models: s.models.includes(name) ? s.models : s.models.concat(name), model: name }));
+          });
           return;
         }
         this.setState({ model: v });
