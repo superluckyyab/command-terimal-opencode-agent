@@ -504,9 +504,8 @@ body.wl-dragging .wb-grid{transition:none}
         </span>
       </div>
 
-      <!-- transcript (Operator) — replaced by the native opencode terminal below -->
-      <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
-      <div class="chat-scroll" ref="{{ chatRef }}" style="flex:1;padding:14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
+      <!-- transcript (always shown; native mode adds an opencode terminal below) -->
+      <div class="chat-scroll" ref="{{ chatRef }}" style="flex:1;min-height:0;padding:14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
         <sc-for list="{{ chat }}" as="m" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column">
             <sc-if value="{{ m.user }}" hint-placeholder-val="{{ false }}">
@@ -553,15 +552,16 @@ body.wl-dragging .wb-grid{transition:none}
           <div style="font-size:12px;color:var(--color-accent-2-700);font-style:italic">Operator is thinking…</div>
         </sc-if>
       </div>
-      </sc-if>
-      <!-- native opencode: the AI panel IS a terminal running the real opencode TUI -->
+      <!-- native opencode: a real opencode terminal BELOW the chat — both usable -->
       <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
-      <div ref="{{ opHostRef }}" style="flex:1;min-height:0;display:flex;background:#1b1a19;overflow:hidden"></div>
+      <div style="flex:1.2 1 0;min-height:120px;display:flex;flex-direction:column;border-top:1px solid var(--color-divider)">
+        <div style="padding:3px 10px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--color-neutral-600);background:var(--color-surface);flex:none">opencode terminal — type here</div>
+        <div ref="{{ opHostRef }}" style="flex:1;min-height:0;display:flex;background:#1b1a19;overflow:hidden"></div>
+      </div>
       </sc-if>
 
       <!-- composer -->
       <div style="padding:12px 14px;border-top:1px solid var(--color-divider);display:flex;flex-direction:column;gap:8px;flex:none">
-        <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
         <!-- quoted reference chip -->
         <sc-if value="{{ hasQuote }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex;gap:8px;align-items:flex-start;background:var(--color-surface);border-left:2px solid var(--color-accent-2);border-radius:var(--radius-md);padding:7px 10px">
@@ -581,15 +581,10 @@ body.wl-dragging .wb-grid{transition:none}
           </div>
         </sc-if>
         <textarea class="input" rows="2" placeholder="{{ composerPh }}" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}"></textarea>
-        </sc-if>
         <div style="display:flex;align-items:center;gap:8px">
           <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:160px;height:30px;font-size:12px;padding:2px 8px">
             <sc-for list="{{ modelOpts }}" as="mo" hint-placeholder-count="1"><option value="{{ mo.v }}">{{ mo.label }}</option></sc-for>
           </select>
-          <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
-            <span style="font-size:11px;color:var(--color-neutral-600);margin-left:8px">opencode runs here — type above</span>
-          </sc-if>
-          <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
           <select class="input" value="{{ aiMode }}" onChange="{{ onModeSelect }}" style="width:auto;height:30px;font-size:12.5px;padding:2px 8px;margin-left:auto">
             <option value="manual">Manual</option>
             <option value="auto">Auto</option>
@@ -599,7 +594,6 @@ body.wl-dragging .wb-grid{transition:none}
           </sc-if>
           <sc-if value="{{ chatIdle }}" hint-placeholder-val="{{ true }}">
             <button class="btn btn-primary" style="padding-block:6px" onClick="{{ sendChat }}">Send</button>
-          </sc-if>
           </sc-if>
         </div>
       </div>
@@ -3438,15 +3432,8 @@ class Component extends DCLogic {
 
   send() {
     const text = this.state.draft.trim(); if (!text) return;
-    // Native opencode: the AI panel IS the opencode terminal — you type in it
-    // directly. If anything is left in the (hidden) composer, forward it to the
-    // op-pane's PTY so it still reaches opencode.
-    if (this.state.agentMode === 'native') {
-      const p = this.opPane;
-      if (p && p.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: p.ptyId, data: text + '\r' }).catch(() => {});
-      this.setState({ draft: '' });
-      return;
-    }
+    // The composer always drives the built-in Operator chat. In native mode the
+    // opencode terminal below is a separate input — you type into it directly.
     if (text.startsWith('/')) {
       this.addChat(this.state.activeTab, { id: ++this.seq, kind: 'user', text });
       this.setState({ draft: '' });
@@ -4648,7 +4635,7 @@ class Component extends DCLogic {
       sendChat: () => this.send(),
       chatBusy: thinkingNow, chatIdle: !thinkingNow,
       stopChat: () => this.stopOpencode(),
-      composerPh: st.agentMode === 'native' ? 'Type into opencode (runs in the terminal)…' : 'Message the Operator…',
+      composerPh: 'Message the Operator…',
       // sessions view
       mgrRows,
       // settings
