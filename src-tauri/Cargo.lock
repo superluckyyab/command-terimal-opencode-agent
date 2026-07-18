@@ -4075,7 +4075,7 @@ dependencies = [
 
 [[package]]
 name = "wireline"
-version = "1.22.0"
+version = "1.23.0"
 dependencies = [
  "portable-pty",
  "serde",

@@ -573,16 +573,6 @@ body.wl-dragging .wb-grid{transition:none}
             </sc-for>
           </div>
         </sc-if>
-        <!-- Operator ⇄ native opencode switch -->
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-          <div style="display:flex;border:1px solid var(--color-divider);border-radius:var(--radius-md);overflow:hidden;font-size:12px">
-            <span onClick="{{ setOperatorMode }}" title="Built-in step-by-step Operator" style="padding:4px 10px;cursor:pointer;background:{{ opModeBg }};color:{{ opModeFg }}">Operator</span>
-            <span onClick="{{ setNativeMode }}" title="Run the real opencode TUI in the terminal" style="padding:4px 10px;cursor:pointer;background:{{ natModeBg }};color:{{ natModeFg }};font-family:ui-monospace,Menlo,monospace">opencode</span>
-          </div>
-          <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
-            <span style="font-size:11px;color:var(--color-neutral-600)">runs in the terminal ←</span>
-          </sc-if>
-        </div>
         <textarea class="input" rows="2" placeholder="{{ composerPh }}" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}"></textarea>
         <div style="display:flex;align-items:center;gap:8px">
           <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:150px;height:30px;font-size:12px;padding:2px 8px">
@@ -1630,7 +1620,52 @@ class Component extends DCLogic {
     return null;
   }
 
-  paneCount() { return this.panes ? this.panes.size : 0; }
+  paneCount() { return this.currentLeaves().length; } // panes in the CURRENT tab's view
+
+  // ─── per-tab persistence ──────────────────────────────────────────────────
+  // Each tab keeps its OWN split-view (a layout tree + panes) with LIVE PTYs and
+  // scrollback. Switching tabs re-mounts that tab's pane DOM and detaches the
+  // others — it never kills a PTY — so a session and its history are still there
+  // when you come back. layout/activePid alias whichever tab is mounted; all
+  // panes across all tabs live in the single this.panes map (pids are unique),
+  // and PTY events already route to the owning pane via paneByPty(), so a
+  // background tab keeps receiving output while hidden.
+  get layout() { const v = this.tabViews && this.tabViews.get(this._mountedTid); return v ? v.layout : null; }
+  set layout(x) { const v = this.tabViews && this.tabViews.get(this._mountedTid); if (v) v.layout = x; }
+  get activePid() { const v = this.tabViews && this.tabViews.get(this._mountedTid); return v ? v.activePid : null; }
+  set activePid(x) { const v = this.tabViews && this.tabViews.get(this._mountedTid); if (v) v.activePid = x; }
+
+  // A tab is keyed by its session id; the tab-less startup terminal uses a sentinel.
+  viewKey() { return this.state.activeTab || '__default__'; }
+
+  // Create (once) the view for a tab: one fresh pane, connected on first mount.
+  ensureTabView(key) {
+    if (!this.tabViews) this.tabViews = new Map();
+    let v = this.tabViews.get(key);
+    if (!v) { const pane = this.createPane(); v = { layout: { pane }, activePid: pane.pid, _fresh: pane }; this.tabViews.set(key, v); }
+    return v;
+  }
+
+  // Mount a tab's view into the host: re-append ITS pane elements (the previously
+  // mounted tab's panes are detached from the DOM but keep running). No pty_kill.
+  mountTabView(key) {
+    const v = this.ensureTabView(key);
+    this._mountedTid = key;          // layout/activePid now resolve to v
+    this.rebuildLayout();            // re-attach this view's pane DOM
+    if (v._fresh) {
+      // brand-new view → size it, connect its one pane ONCE, then it lives on
+      const pane = v._fresh; v._fresh = null;
+      setTimeout(() => { this.fitPane(pane); this.connectPane(pane, this.sess(key)); }, 50);
+    } else {
+      // returning to an existing tab → refit + redraw its retained buffers
+      setTimeout(() => this.currentLeaves().forEach(p => { this.fitPane(p); try { p.term.refresh(0, p.term.rows - 1); } catch (e) {} }), 30);
+    }
+  }
+
+  // Panes of the CURRENTLY MOUNTED view only (not every tab's panes).
+  currentLeaves() { const out = []; const walk = (n) => { if (!n) return; if (n.pane) out.push(n.pane); else { walk(n.a); walk(n.b); } }; walk(this.layout); return out; }
+
+  destroyView(v) { if (!v) return; const walk = (n) => { if (!n) return; if (n.pane) this.destroyPane(n.pane); else { walk(n.a); walk(n.b); } }; walk(v.layout); }
 
   // ssh/telnet command for a real user-created session; null → local default shell.
   sshSpecFor(sess) {
@@ -1828,7 +1863,7 @@ class Component extends DCLogic {
     this.renderGutter(pane);
   }
 
-  fitAllPanes() { if (this.panes) for (const p of this.panes.values()) this.fitPane(p); }
+  fitAllPanes() { this.currentLeaves().forEach(p => this.fitPane(p)); }
 
   setActivePane(pid) {
     if (!this.panes || !this.panes.has(pid)) return;
@@ -1844,9 +1879,9 @@ class Component extends DCLogic {
   }
 
   stylePanes() {
-    if (!this.panes) return;
-    const multi = this.panes.size > 1;
-    for (const p of this.panes.values()) {
+    const cur = this.currentLeaves(); if (!cur.length) return;
+    const multi = cur.length > 1;
+    for (const p of cur) {
       p.el.style.boxShadow = multi
         ? ('inset 0 0 0 1px ' + (p.pid === this.activePid ? 'rgba(63,181,214,.55)' : 'rgba(255,255,255,.07)'))
         : 'none';
@@ -1936,7 +1971,7 @@ class Component extends DCLogic {
   closeActivePane() { this.closePaneById(this.activePid); }
 
   closePaneById(pid) {
-    if (!this.panes || this.panes.size <= 1) return;
+    if (this.currentLeaves().length <= 1) return; // never close a tab's only pane
     const cur = this.pane(pid); if (!cur) return;
     const hit = this.findLeaf(this.layout, pid, null); if (!hit || !hit.parent) return;
     const sibling = hit.parent.a === hit.node ? hit.parent.b : hit.parent.a;
@@ -1970,13 +2005,10 @@ class Component extends DCLogic {
     const listen = T.event && T.event.listen;
     host.style.padding = '0';
     this.panes = new Map();
+    this.tabViews = new Map();
     this.layoutEl = document.createElement('div');
     this.layoutEl.style.cssText = 'position:absolute;inset:0;display:flex';
     host.appendChild(this.layoutEl);
-    const root = this.createPane();
-    this.activePid = root.pid;
-    this.layout = { pane: root };
-    this.rebuildLayout();
     // PTY events are routed to the pane that owns the pty id
     if (listen) {
       listen('pty://data', ev => { const p = ev.payload; const pane = p && this.paneByPty(p.id); if (pane) this.onPtyData(pane, p.data); }).then(un => { this.xtermUnData = un; });
@@ -2013,7 +2045,7 @@ class Component extends DCLogic {
     this.xtermResize = () => this.fitAllPanes();
     window.addEventListener('resize', this.xtermResize);
     setTimeout(this.xtermResize, 60);
-    this.connectPane(root, this.sess(this.state.activeTab));
+    this.mountTabView(this.viewKey()); // first tab's view (or the tab-less default terminal)
   }
 
   // PTY output is fed to the pane's zmodem Sentry first (so rz/sz transfers are
@@ -2223,12 +2255,12 @@ class Component extends DCLogic {
     );
   }
 
-  // Broadcast to EVERY pane's PTY (Sender "All Sessions"). Returns true when
-  // at least one pane received the data.
+  // Broadcast to every pane of the CURRENT tab (Sender "All Sessions" = every
+  // split pane in view). Returns true when at least one pane received the data.
   writeToAllPanes(data) {
     let n = 0;
-    if (this.panes && window.__TAURI__) {
-      for (const p of this.panes.values()) {
+    if (window.__TAURI__) {
+      for (const p of this.currentLeaves()) {
         if (p.ptyId) { window.__TAURI__.invoke('pty_write', { id: p.ptyId, data }).catch(() => {}); n++; }
       }
     }
@@ -2406,10 +2438,11 @@ class Component extends DCLogic {
       this._lastFitH = host.clientHeight;
       this.fitAllPanes();
     }
-    const active = this.sess(this.state.activeTab);
-    const activeId = active ? active.id : null;
+    // Switch tabs by swapping which tab's view is mounted — the other tabs' panes
+    // stay alive (PTY + scrollback). No reconnect, so a session survives the switch.
+    const key = this.viewKey();
+    if (key !== this._mountedTid) this.mountTabView(key);
     const pane = this.pane();
-    if (pane && activeId !== pane.sessId) this.connectPane(pane, active);
     if (pane) this.renderGutter(pane);
   }
 
@@ -2419,6 +2452,7 @@ class Component extends DCLogic {
     if (this.xtermUnDrop) { try { this.xtermUnDrop(); } catch (e) {} }
     if (this.xtermResize) window.removeEventListener('resize', this.xtermResize);
     if (this.panes) { for (const p of Array.from(this.panes.values())) this.destroyPane(p); this.panes = null; }
+    this.tabViews = null; this._mountedTid = null;
     this.layoutEl = null;
   }
 
@@ -2532,6 +2566,9 @@ class Component extends DCLogic {
 
   closeTab(id, e) {
     if (e && e.stopPropagation) e.stopPropagation();
+    // free that tab's live terminals (its PTYs + xterms); syncXterm mounts the next
+    const v = this.tabViews && this.tabViews.get(id);
+    if (v) { this.destroyView(v); this.tabViews.delete(id); if (this._mountedTid === id) this._mountedTid = null; }
     this.setState(s => {
       const openTabs = s.openTabs.filter(t => t !== id);
       return { openTabs, closedTabs: s.closedTabs.concat(id).slice(-10), activeTab: s.activeTab === id ? (openTabs[0] || null) : s.activeTab };
@@ -4425,12 +4462,6 @@ class Component extends DCLogic {
       aiResizeStart: (e) => this.startPanelDrag(e, 'ai'),
       toggleAi: () => this.setState(s => ({ aiCollapsed: !s.aiCollapsed })),
       aiMode: st.aiMode,
-      // Operator ⇄ native opencode switch
-      agentNative: st.agentMode === 'native',
-      setOperatorMode: () => this.setAgentMode('operator'),
-      setNativeMode: () => this.setAgentMode('native'),
-      opModeBg: st.agentMode === 'native' ? 'transparent' : 'var(--color-accent)', opModeFg: st.agentMode === 'native' ? 'var(--color-text)' : 'var(--color-bg)',
-      natModeBg: st.agentMode === 'native' ? 'var(--color-accent)' : 'transparent', natModeFg: st.agentMode === 'native' ? 'var(--color-bg)' : 'var(--color-text)',
       onModeSelect: (e) => this.setState({ aiMode: e.target.value }),
       setAuto: () => this.setState({ aiMode: 'auto' }),
       setManual: () => this.setState({ aiMode: 'manual' }),
@@ -4541,11 +4572,16 @@ class Component extends DCLogic {
         togglePin: () => this.setState(s => ({ mcps: s.mcps.map(x => x.name === m.name ? Object.assign({}, x, { pinned: !x.pinned }) : x) })),
         use: () => this.setState({ mcpOpen: false, draft: '@' + m.name + ' ' })
       })),
-      aiModelShort: st.model,
-      aiModelSel: st.model,
-      modelOpts: st.models.map(m => ({ v: m, label: m })),
+      aiModelShort: st.agentMode === 'native' ? 'opencode (native)' : st.model,
+      // The bottom-left dropdown is the single AI-backend switch. "opencode (native)"
+      // hands the terminal over to the real opencode TUI; every other entry is the
+      // built-in step-by-step Operator (or an API model).
+      aiModelSel: st.agentMode === 'native' ? '__native__' : st.model,
+      modelOpts: st.models.map(m => ({ v: m, label: m })).concat({ v: '__native__', label: 'opencode (native)' }),
       onModelSel: (e) => {
         const v = e.target.value;
+        if (v === '__native__') { this.setAgentMode('native'); return; }
+        if (this.state.agentMode === 'native') this.setAgentMode('operator');
         if (v === '__add__') {
           this.forceUpdate(); // keep the select on the current model meanwhile
           this.askText('New model name (e.g. glm-4-plus)', '', (raw) => {
