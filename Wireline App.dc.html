@@ -504,7 +504,8 @@ body.wl-dragging .wb-grid{transition:none}
         </span>
       </div>
 
-      <!-- transcript -->
+      <!-- transcript (Operator) — replaced by the native opencode terminal below -->
+      <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
       <div class="chat-scroll" ref="{{ chatRef }}" style="flex:1;padding:14px;display:flex;flex-direction:column;gap:14px;overflow-y:auto">
         <sc-for list="{{ chat }}" as="m" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column">
@@ -552,9 +553,15 @@ body.wl-dragging .wb-grid{transition:none}
           <div style="font-size:12px;color:var(--color-accent-2-700);font-style:italic">Operator is thinking…</div>
         </sc-if>
       </div>
+      </sc-if>
+      <!-- native opencode: the AI panel IS a terminal running the real opencode TUI -->
+      <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
+      <div ref="{{ opHostRef }}" style="flex:1;min-height:0;position:relative;background:#1b1a19;overflow:hidden"></div>
+      </sc-if>
 
       <!-- composer -->
       <div style="padding:12px 14px;border-top:1px solid var(--color-divider);display:flex;flex-direction:column;gap:8px;flex:none">
+        <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
         <!-- quoted reference chip -->
         <sc-if value="{{ hasQuote }}" hint-placeholder-val="{{ false }}">
           <div style="display:flex;gap:8px;align-items:flex-start;background:var(--color-surface);border-left:2px solid var(--color-accent-2);border-radius:var(--radius-md);padding:7px 10px">
@@ -574,10 +581,15 @@ body.wl-dragging .wb-grid{transition:none}
           </div>
         </sc-if>
         <textarea class="input" rows="2" placeholder="{{ composerPh }}" value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onDraftKey }}"></textarea>
+        </sc-if>
         <div style="display:flex;align-items:center;gap:8px">
-          <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:150px;height:30px;font-size:12px;padding:2px 8px">
+          <select class="input" value="{{ aiModelSel }}" onChange="{{ onModelSel }}" style="width:auto;max-width:160px;height:30px;font-size:12px;padding:2px 8px">
             <sc-for list="{{ modelOpts }}" as="mo" hint-placeholder-count="1"><option value="{{ mo.v }}">{{ mo.label }}</option></sc-for>
           </select>
+          <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
+            <span style="font-size:11px;color:var(--color-neutral-600);margin-left:8px">opencode runs here — type above</span>
+          </sc-if>
+          <sc-if value="{{ agentOperator }}" hint-placeholder-val="{{ true }}">
           <select class="input" value="{{ aiMode }}" onChange="{{ onModeSelect }}" style="width:auto;height:30px;font-size:12.5px;padding:2px 8px;margin-left:auto">
             <option value="manual">Manual</option>
             <option value="auto">Auto</option>
@@ -587,6 +599,7 @@ body.wl-dragging .wb-grid{transition:none}
           </sc-if>
           <sc-if value="{{ chatIdle }}" hint-placeholder-val="{{ true }}">
             <button class="btn btn-primary" style="padding-block:6px" onClick="{{ sendChat }}">Send</button>
+          </sc-if>
           </sc-if>
         </div>
       </div>
@@ -1447,6 +1460,7 @@ class Component extends DCLogic {
     this.chatRef = React.createRef();
     this.termInputRef = React.createRef();
     this.xtermHostRef = React.createRef();
+    this.opHostRef = React.createRef(); // host for the native-opencode terminal (AI panel)
     this.matchRef = React.createRef();
     this.runQueue = null;
     this.seq = 100;
@@ -1733,7 +1747,10 @@ class Component extends DCLogic {
   }
 
   // Build one pane: container div + xterm + gutter + zmodem sentry + handlers.
-  createPane() {
+  // standalone = a pane NOT part of the tab layout (e.g. the native-opencode
+  // terminal in the AI panel): it still lives in this.panes for PTY routing, but
+  // clicking it must not steal the LEFT terminal's active pane.
+  createPane(standalone) {
     const pid = 'p' + (++this.seq);
     const el = document.createElement('div');
     el.style.cssText = 'position:relative;overflow:hidden;background:#1b1a19;box-sizing:border-box;min-width:120px;min-height:60px;flex:1 1 0';
@@ -1822,11 +1839,13 @@ class Component extends DCLogic {
     closeBtn.addEventListener('mouseenter', () => { closeBtn.style.color = '#fff'; closeBtn.style.background = 'rgba(229,72,77,.65)'; });
     closeBtn.addEventListener('mouseleave', () => { closeBtn.style.color = '#8f8b89'; closeBtn.style.background = 'rgba(0,0,0,.35)'; });
     closeBtn.addEventListener('click', (e) => { e.stopPropagation(); this.closePaneById(pid); });
-    el.appendChild(closeBtn);
-    pane.closeBtn = closeBtn;
-    // focusing / clicking a pane makes it the active one
-    el.addEventListener('mousedown', () => this.setActivePane(pid));
-    try { if (term.textarea) term.textarea.addEventListener('focus', () => this.setActivePane(pid)); } catch (e) {}
+    if (!standalone) { el.appendChild(closeBtn); pane.closeBtn = closeBtn; }
+    // focusing / clicking a pane makes it the active one (layout panes only)
+    if (!standalone) {
+      el.addEventListener('mousedown', () => this.setActivePane(pid));
+      try { if (term.textarea) term.textarea.addEventListener('focus', () => this.setActivePane(pid)); } catch (e) {}
+    }
+    pane.standalone = !!standalone;
     // refit whenever the container resizes → cols match width → lines wrap
     try {
       pane.ro = new ResizeObserver(() => {
@@ -2446,13 +2465,38 @@ class Component extends DCLogic {
     if (pane) this.renderGutter(pane);
   }
 
+  // Native opencode: the AI panel hosts its OWN terminal (a standalone pane) that
+  // runs the real `opencode` TUI on the local system — the left terminal stays the
+  // session. The op-pane is created once and kept alive across mode toggles; here
+  // we just (re)attach it to the AI-panel host whenever native mode is showing.
+  syncOpTerminal() {
+    if (!this.xtermAvailable() || !this.panes) return;
+    if (this.state.agentMode !== 'native' || this.state.aiCollapsed) return;
+    const host = this.opHostRef.current;
+    if (!host) return;
+    if (!this.opPane) {
+      const pane = this.createPane(true);
+      this.opPane = pane;
+      host.appendChild(pane.el);
+      setTimeout(() => {
+        this.fitPane(pane);
+        this.connectPane(pane, null); // local shell on this machine
+        // give the shell a moment, then drop into the opencode TUI
+        setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: 'opencode\r' }).catch(() => {}); }, 700);
+      }, 50);
+    } else if (this.opPane.el.parentNode !== host) {
+      host.appendChild(this.opPane.el);
+      setTimeout(() => { this.fitPane(this.opPane); try { this.opPane.term.refresh(0, this.opPane.term.rows - 1); } catch (e) {} }, 30);
+    }
+  }
+
   cleanupXterm() {
     if (this.xtermUnData) { try { this.xtermUnData(); } catch (e) {} }
     if (this.xtermUnExit) { try { this.xtermUnExit(); } catch (e) {} }
     if (this.xtermUnDrop) { try { this.xtermUnDrop(); } catch (e) {} }
     if (this.xtermResize) window.removeEventListener('resize', this.xtermResize);
     if (this.panes) { for (const p of Array.from(this.panes.values())) this.destroyPane(p); this.panes = null; }
-    this.tabViews = null; this._mountedTid = null;
+    this.tabViews = null; this._mountedTid = null; this.opPane = null;
     this.layoutEl = null;
   }
 
@@ -2468,6 +2512,7 @@ class Component extends DCLogic {
   componentDidUpdate() {
     this.applyBodyTheme();
     this.syncXterm();
+    this.syncOpTerminal();
     // persist quick commands + groups whenever they change
     const qj = JSON.stringify({ g: this.state.quickGroups, c: this.state.quickCmds });
     if (qj !== this._lastQuickJson) {
@@ -2994,7 +3039,8 @@ class Component extends DCLogic {
     const move = (ev) => {
       const dx = ev.clientX - startX;
       if (which === 'tree') this.setState({ treeWpx: Math.max(160, Math.min(480, startW + dx)) });
-      else this.setState({ aiWpx: Math.max(240, Math.min(560, startW - dx)) });
+      // AI panel: drag as wide as you like — only keep a sliver of the terminal visible
+      else this.setState({ aiWpx: Math.max(240, Math.min((window.innerWidth || 1400) - 220, startW - dx)) });
     };
     const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.style.cursor = ''; document.body.classList.remove('wl-dragging'); };
     window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
@@ -3382,13 +3428,12 @@ class Component extends DCLogic {
 
   send() {
     const text = this.state.draft.trim(); if (!text) return;
-    // Native opencode: the composer is just a bridge to the real opencode TUI
-    // running in the terminal — forward the line to the PTY (no slash handling,
-    // no built-in Operator).
+    // Native opencode: the AI panel IS the opencode terminal — you type in it
+    // directly. If anything is left in the (hidden) composer, forward it to the
+    // op-pane's PTY so it still reaches opencode.
     if (this.state.agentMode === 'native') {
-      const sessId = this.state.activeTab;
-      if (!this.writeToPty(text + '\r')) { this.opSay('Native opencode needs a live terminal. Open a session (or the ＋ local terminal) first.', false, '', sessId); return; }
-      this.addChat(sessId, { id: ++this.seq, kind: 'user', text });
+      const p = this.opPane;
+      if (p && p.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: p.ptyId, data: text + '\r' }).catch(() => {});
       this.setState({ draft: '' });
       return;
     }
@@ -3401,18 +3446,12 @@ class Component extends DCLogic {
     this.sendAI(text, this.state.quote);
   }
 
-  // Toggle the AI backend. Switching to native opencode launches the real
-  // `opencode` TUI in the active terminal so the user can drive it directly.
+  // Toggle the AI backend. 'native' turns the AI panel into its OWN opencode
+  // terminal (see syncOpTerminal) — the left terminal is untouched. The op-pane
+  // is created lazily and kept alive, so flipping back and forth resumes it.
   setAgentMode(mode) {
     if (mode === this.state.agentMode) return;
-    this.setState({ agentMode: mode }, () => this.saveConfig());
-    const sessId = this.state.activeTab;
-    if (mode === 'native') {
-      if (this.writeToPty('opencode\r')) this.opSay('Launched native opencode in the terminal on the left — type here or in the terminal to drive it.', false, '', sessId);
-      else this.opSay('Switched to native opencode. Open a session (or the ＋ local terminal), then it will launch there.', false, '', sessId);
-    } else {
-      this.opSay('Back to the built-in Operator (step-by-step). Native opencode keeps running in the terminal if you started it.', false, '', sessId);
-    }
+    this.setState({ agentMode: mode }, () => { this.saveConfig(); this.syncOpTerminal(); });
   }
 
   needsApproval(step) {
@@ -4462,6 +4501,8 @@ class Component extends DCLogic {
       aiResizeStart: (e) => this.startPanelDrag(e, 'ai'),
       toggleAi: () => this.setState(s => ({ aiCollapsed: !s.aiCollapsed })),
       aiMode: st.aiMode,
+      agentNative: st.agentMode === 'native',
+      agentOperator: st.agentMode !== 'native',
       onModeSelect: (e) => this.setState({ aiMode: e.target.value }),
       setAuto: () => this.setState({ aiMode: 'auto' }),
       setManual: () => this.setState({ aiMode: 'manual' }),
