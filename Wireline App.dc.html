@@ -277,13 +277,13 @@ body.wl-dragging .wb-grid{transition:none}
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 3.5v3h-3M3 12.5v-3h3"></path><path d="M12.5 6.5A5 5 0 003.6 5M3.5 9.5a5 5 0 008.9 1.5"></path></svg>
         </span>
         <span style="width:1px;height:16px;background:var(--color-divider);flex:none"></span>
-        <span onClick="{{ splitH }}" title="Split horizontally — 左右分屏" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
+        <span onClick="{{ splitH }}" title="Split horizontally" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M8 3v10"></path></svg>
         </span>
-        <span onClick="{{ splitV }}" title="Split vertically — 上下分屏" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
+        <span onClick="{{ splitV }}" title="Split vertically" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M2 8h12"></path></svg>
         </span>
-        <span onClick="{{ closePaneBtn }}" title="Close pane — 关闭当前分屏" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
+        <span onClick="{{ closePaneBtn }}" title="Close pane" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-2-700)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"></rect><path d="M6 6.5l4 3M10 6.5l-4 3"></path></svg>
         </span>
         <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;height:28px;padding:0 10px;border:1px solid var(--color-divider);border-radius:var(--radius-md);background:var(--color-surface)">
@@ -994,13 +994,13 @@ body.wl-dragging .wb-grid{transition:none}
   <sc-if value="{{ resetOpen }}" hint-placeholder-val="{{ false }}">
     <div class="dialog-backdrop" style="z-index:88">
       <div class="dialog" style="width:430px" onClick="{{ stop }}">
-        <div class="dialog-title">恢复出厂设置</div>
-        <div style="font-size:13px;color:var(--color-neutral-700);margin-bottom:10px">将删除本机上的全部 Wireline 配置并重启界面：</div>
+        <div class="dialog-title">Factory Reset</div>
+        <div style="font-size:13px;color:var(--color-neutral-700);margin-bottom:10px">This will erase ALL Wireline settings on this machine and restart the interface:</div>
         <div style="font-size:12.5px;font-family:ui-monospace,Menlo,monospace;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:10px 12px;line-height:1.9;white-space:pre-wrap;margin-bottom:10px">{{ resetSummary }}</div>
-        <div style="font-size:12px;color:var(--color-accent-2-700)">此操作不可恢复。</div>
+        <div style="font-size:12px;color:var(--color-accent-2-700)">This cannot be undone.</div>
         <div class="dialog-actions">
           <button class="btn btn-secondary" onClick="{{ closeReset }}">Cancel</button>
-          <button class="btn btn-primary" style="background:var(--color-accent-2);border-color:var(--color-accent-2)" onClick="{{ doFactoryReset }}">确认重置</button>
+          <button class="btn btn-primary" style="background:var(--color-accent-2);border-color:var(--color-accent-2)" onClick="{{ doFactoryReset }}">Reset Everything</button>
         </div>
       </div>
     </div>
@@ -1930,7 +1930,7 @@ class Component extends DCLogic {
             if (this._pendingUploads) {
               this._pendingUploads = null;
               const p = this.pane();
-              if (p) { try { p.term.write('\r\n\x1b[33m[rz 无响应 — 请确认远端已安装 lrzsz（Debian/Ubuntu: apt install lrzsz / CentOS: yum install lrzsz）]\x1b[0m\r\n'); } catch (e) {} }
+              if (p) { try { p.term.write('\r\n\x1b[33m[rz did not respond - make sure lrzsz is installed on the remote (Debian/Ubuntu: apt install lrzsz, CentOS: yum install lrzsz)]\x1b[0m\r\n'); } catch (e) {} }
             }
           }, 6000);
         } catch (e) {
@@ -2045,8 +2045,8 @@ class Component extends DCLogic {
   fmtFullTs(ms) {
     const d = new Date(ms);
     const p = (n) => (n < 10 ? '0' : '') + n;
-    const wd = ['日', '一', '二', '三', '四', '五', '六'][d.getDay()];
-    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' 周' + wd;
+    const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' ' + wd;
   }
 
   writeBytesToPty(pane, octets) {
@@ -2892,7 +2892,7 @@ class Component extends DCLogic {
       { label: 'Split Terminal Horizontally', fn: () => this.splitPane('row') },
       { label: 'Split Terminal Vertically', fn: () => this.splitPane('col') },
       { label: 'Close Terminal Pane', fn: () => this.closeActivePane() },
-      { label: this.state.termWrap !== false ? 'Wrap Lines: Off (不换行)' : 'Wrap Lines: On (自动换行)', fn: () => this.toggleTermWrap() },
+      { label: this.state.termWrap !== false ? 'Wrap Lines: Off' : 'Wrap Lines: On', fn: () => this.toggleTermWrap() },
       { label: 'Next Tab', hint: 'Ctrl+Tab', fn: () => this.stepTab(1) },
       { label: 'Previous Tab', fn: () => this.stepTab(-1) },
       { label: 'AI Mode: Auto', fn: () => this.setState({ aiMode: 'auto' }) },
@@ -3431,7 +3431,6 @@ class Component extends DCLogic {
         m('Find Next Selection', null, 'Ctrl+Alt+F3'),
         m('Find Previous Selection', null, 'Ctrl+Shift+F3'),
         DIV,
-        m('Highlight Text…', () => this.setState({ searchOpen: true }), '')
       ]},
       { label: 'Selection', build: (m) => [
         m('Select', null, '', { sub: flyout(['Word', 'Line', 'Paragraph', 'All']) }),
@@ -3485,7 +3484,7 @@ class Component extends DCLogic {
       { label: 'Help', build: (m) => [
         m('About Wireline', null, ''),
         DIV,
-        m('恢复出厂设置 (Factory Reset)…', () => this.setState({ resetOpen: true }), '')
+        m('Factory Reset…', () => this.setState({ resetOpen: true }), '')
       ]}
     ];
 
@@ -4051,8 +4050,6 @@ class Component extends DCLogic {
           it('Copy Command', lastCmd ? () => cp(lastCmd) : null),
           it('Paste', () => { try { navigator.clipboard.readText().then(t => this.setState(s => ({ termDraft: s.termDraft + t }))); } catch (e) {} }, 'Shift+Ins'),
           it('Paste Selected Text', sel ? () => this.setState(s => ({ termDraft: s.termDraft + sel })) : null, 'Ctrl+Shift+X'),
-          { isItem: false, divider: false, swatches: true, colors: ['#e5484d', '#e8a33d', '#f2e13c', '#46a758', '#5472e4', '#00b3c4', '#ab4aba'].map(cc => ({ c: cc, pick: () => { if (sel) this.setState(s => ({ highlights: s.highlights.concat({ q: sel, color: cc }), tmCtx: { open: false, x: 0, y: 0, sel: '' } })); } })), clearHl: () => this.setState({ highlights: [], tmCtx: { open: false, x: 0, y: 0, sel: '' } }) },
-          it('Highlight Text…', sel ? () => this.setState(s => ({ highlights: s.highlights.concat({ q: sel, color: '#f2e13c' }) })) : null),
           div,
           it('Find…', () => this.setState({ searchOpen: true, logQuery: sel || st.logQuery, activeMatch: 0 }), 'Ctrl+Shift+F'),
           it('Search Online', null, '', [
@@ -4076,12 +4073,12 @@ class Component extends DCLogic {
           it('Split Vertically', () => this.splitPane('col')),
           it('Close Pane', this.paneCount() > 1 ? () => this.closeActivePane() : null),
           div,
-          it((st.termWrap !== false ? '✓ ' : '  ') + 'Wrap Lines (自动换行)', () => this.toggleTermWrap()),
+          it((st.termWrap !== false ? '✓ ' : '  ') + 'Wrap Lines', () => this.toggleTermWrap()),
           div,
           it('Session Triggers…', null),
           it('Transfer Binary', null, '', [si('Send (sz)', () => this.execLocal('rz')), si('Receive (rz)', () => this.execLocal('rz')), si('Zmodem…', null)]),
           it('Log', null, '', [si(st.recActive ? 'Stop Recording' : 'Start Recording', () => this.toggleRec()), si('Open Log Folder', () => this.setState({ recPopOpen: true })), si('Export Log', () => this.exportLog())]),
-          it('Reset', null, '', [si('Reset Terminal', () => { clearBuf(); this.appendLines(st.activeTab, [this.mkLine.o('Terminal reset · ' + new Date().toLocaleTimeString())]); }), si('Reset Highlights', () => this.setState({ highlights: [] }))])
+          it('Reset', null, '', [si('Reset Terminal', () => { clearBuf(); this.appendLines(st.activeTab, [this.mkLine.o('Terminal reset · ' + new Date().toLocaleTimeString())]); })])
         ];
       })(),
       // command palette
@@ -4114,7 +4111,7 @@ class Component extends DCLogic {
       resetOpen: st.resetOpen,
       closeReset: () => this.setState({ resetOpen: false }),
       doFactoryReset: () => this.factoryReset(),
-      resetSummary: 'OneKey 凭据 ' + st.oneKeys.length + ' 条 · 快捷命令 ' + st.quickCmds.length + ' 条 (' + st.quickGroups.length + ' 组)\n会话 ' + st.sessions.length + ' 个 · 历史命令 ' + Object.values(st.cmdHistories).reduce((n, a) => n + (a ? a.length : 0), 0) + ' 条\n模型 / API / 日志目录等全部设置',
+      resetSummary: st.oneKeys.length + ' OneKey credential(s) · ' + st.quickCmds.length + ' quick command(s) in ' + st.quickGroups.length + ' group(s)\n' + st.sessions.length + ' session(s) · ' + Object.values(st.cmdHistories).reduce((n, a) => n + (a ? a.length : 0), 0) + ' command history entries\nmodel / API / log-directory and all other settings',
       darkIcon: st.dark ? '☼' : '☾',
       darkTip: st.dark ? 'Switch to light' : 'Dark mode',
       // session context menu (pin / delete)
