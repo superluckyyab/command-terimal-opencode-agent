@@ -51,8 +51,9 @@ body.wl-dragging .wb-grid{transition:none}
 .chat-scroll>div{animation:wl-rise .2s ease-out}
 @keyframes wl-rise{from{opacity:0;transform:translateY(5px)}}
 
-/* 15 · typography: large text gets negative tracking */
-.dialog-title,h2{letter-spacing:-.02em}
+/* 15 · typography: comfortable leading for UI text, tight for large headings */
+#dc-root{line-height:1.5}
+.dialog-title,h2{letter-spacing:-.02em;line-height:1.15}
 
 /* 14 · accessibility: gentle equivalents, not missing feedback */
 @media (prefers-reduced-motion: reduce){
@@ -606,7 +607,6 @@ body.wl-dragging .wb-grid{transition:none}
       <h2 style="font-size:26px;margin-bottom:4px">Sessions</h2>
       <span onClick="{{ goTerminal }}" style="font-size:12.5px;color:var(--color-accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">← back to terminal</span>
     </div>
-    <p style="font-size:13px;color:var(--color-neutral-700);margin-bottom:22px">Everything Wireline can reach. Agent access is per session — click a tag to toggle.</p>
     <div style="display:flex;gap:10px;align-items:center;margin-bottom:16px">
       <input class="input" type="text" placeholder="Search by name, host, group…" style="max-width:340px" value="{{ filter }}" onChange="{{ onFilter }}">
       <button class="btn btn-primary" style="margin-left:auto" onClick="{{ openDialog }}">New session</button>
@@ -638,7 +638,6 @@ body.wl-dragging .wb-grid{transition:none}
         <h2 style="font-size:26px;margin-bottom:4px">AI Operator settings</h2>
         <span onClick="{{ goTerminal }}" style="font-size:12.5px;color:var(--color-accent);cursor:pointer;text-decoration:underline;text-underline-offset:3px">← back to terminal</span>
       </div>
-      <p style="font-size:13px;color:var(--color-neutral-700);margin-bottom:26px">How agents may drive your terminals. Every agent action is written to the ledger, whatever the mode. Changes apply immediately.</p>
 
       <div class="field" style="margin-bottom:22px">
         <label>Default mode for new attachments</label>
@@ -673,7 +672,6 @@ body.wl-dragging .wb-grid{transition:none}
       <div class="field" style="margin-bottom:22px">
         <label>API key</label>
         <input class="input" type="password" value="{{ apiKey }}" onChange="{{ onApiKey }}" placeholder="sk-…" style="max-width:380px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
-        <div style="font-size:11px;color:var(--color-neutral-600);margin-top:5px">Stored only on this machine. With a key set, the Operator talks to your real model; otherwise it runs the built-in scripted demo.</div>
       </div>
 
       <div class="field" style="margin-bottom:22px">
@@ -1048,7 +1046,7 @@ body.wl-dragging .wb-grid{transition:none}
               </div>
               <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
                 <label style="text-align:right;font-size:13px;color:var(--color-neutral-700)">Password:</label>
-                <input class="input" type="password" placeholder="sent automatically when prompted" value="{{ dlgPass }}" onChange="{{ onDlgPass }}" style="height:30px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
+                <input class="input" type="password" value="{{ dlgPass }}" onChange="{{ onDlgPass }}" style="height:30px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px">
               </div>
               <div style="display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center">
                 <span></span>
@@ -1344,6 +1342,7 @@ class Component extends DCLogic {
       paletteSel: 0,
       syncInput: false,
       tsMargin: true,
+      termWrap: true,
       highlights: [],
       cmdHistories: {},
       cmdHistH: 170,
@@ -1466,7 +1465,8 @@ class Component extends DCLogic {
     if (Array.isArray(cfg.quickCmds)) next.quickCmds = cfg.quickCmds;
     if (Array.isArray(cfg.quickGroups) && cfg.quickGroups.length) next.quickGroups = cfg.quickGroups;
     if (cfg.logDir) next.recDir = cfg.logDir;
-    if (Object.keys(next).length) this.setState(next);
+    if (typeof cfg.termWrap === 'boolean') next.termWrap = cfg.termWrap;
+    if (Object.keys(next).length) this.setState(next, () => this.fitAllPanes());
   }
 
   currentConfig() {
@@ -1476,8 +1476,14 @@ class Component extends DCLogic {
       quickCmds: st.quickCmds,
       quickGroups: st.quickGroups,
       model: { apiBase: st.apiBase, apiKey: st.apiKey, model: st.model },
-      logDir: st.recDir
+      logDir: st.recDir,
+      termWrap: st.termWrap !== false
     };
+  }
+
+  // Dynamic line-wrap toggle: refit every pane and persist the choice.
+  toggleTermWrap() {
+    this.setState(s => ({ termWrap: s.termWrap === false }), () => { this.fitAllPanes(); this.saveConfig(); });
   }
 
   async loadConfig() {
@@ -1610,12 +1616,18 @@ class Component extends DCLogic {
   createPane() {
     const pid = 'p' + (++this.seq);
     const el = document.createElement('div');
-    // left padding reserves the timestamp gutter; right leaves room for the
-    // search locator strip
-    el.style.cssText = 'position:relative;overflow:hidden;background:#1b1a19;padding:8px 14px 8px 66px;box-sizing:border-box;min-width:120px;min-height:60px;flex:1 1 0';
+    el.style.cssText = 'position:relative;overflow:hidden;background:#1b1a19;box-sizing:border-box;min-width:120px;min-height:60px;flex:1 1 0';
+    // The terminal lives in an INNER box with explicit edges (gutter on the
+    // left, locator strip on the right, breathing room top/bottom). FitAddon
+    // measures this box, so cols always equal the VISIBLE width — wrapping
+    // happens exactly at the pane edge, never beyond it.
+    const inner = document.createElement('div');
+    inner.style.cssText = 'position:absolute;left:78px;right:16px;top:8px;bottom:10px;overflow:hidden';
+    el.appendChild(inner);
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
       fontSize: 13,
+      lineHeight: 1.18, // breathing room between rows (typography pass)
       cursorBlink: true,
       scrollback: 5000,
       // full ANSI-16 palette so server-side colors (ls --color, grep, logs)
@@ -1633,8 +1645,8 @@ class Component extends DCLogic {
     let fit = null, search = null;
     try { fit = new window.FitAddon.FitAddon(); term.loadAddon(fit); } catch (e) {}
     try { search = new window.SearchAddon.SearchAddon(); term.loadAddon(search); } catch (e) {}
-    term.open(el);
-    const pane = { pid, el, term, fit, search, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0, fgActive: false };
+    term.open(inner);
+    const pane = { pid, el, inner, term, fit, search, ptyId: null, sessId: null, pendPass: '', pwSent: false, ptyDead: false, lineBuf: '', scroll: '', marks: [], zsentry: null, gutter: null, ticks: null, ro: null, _raf: 0, fgActive: false };
     // WindTerm-style convenience: selecting text copies it to the clipboard
     term.onSelectionChange(() => {
       const s = term.getSelection();
@@ -1645,7 +1657,7 @@ class Component extends DCLogic {
     // a line keeps the time it was written through scrolling/resizing/reflow.
     try {
       pane.gutter = document.createElement('div');
-      pane.gutter.style.cssText = 'position:absolute;left:0;top:0;width:64px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
+      pane.gutter.style.cssText = 'position:absolute;left:0;top:0;width:74px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
       el.appendChild(pane.gutter);
       term.onLineFeed(() => {
         try {
@@ -1697,8 +1709,27 @@ class Component extends DCLogic {
     return pane;
   }
 
+  // Wrap ON (default): fit cols to the visible width so xterm wraps at the
+  // pane edge. Wrap OFF: fix cols wide and let the pane scroll horizontally.
   fitPane(pane) {
-    try { if (pane.fit) pane.fit.fit(); } catch (e) {}
+    try {
+      if (!pane.fit) return;
+      if (this.state.termWrap !== false) {
+        pane.inner.style.overflowX = 'hidden';
+        // remember whether the view was pinned to the bottom BEFORE refitting —
+        // shrinking the pane (e.g. opening the Sender panel) must not leave the
+        // prompt line half-clipped below the new edge
+        const buf = pane.term.buffer && pane.term.buffer.active;
+        const atBottom = !buf || buf.viewportY >= buf.baseY;
+        pane.fit.fit();
+        if (atBottom) { try { pane.term.scrollToBottom(); } catch (e) {} }
+      } else {
+        pane.inner.style.overflowX = 'auto';
+        const d = pane.fit.proposeDimensions ? pane.fit.proposeDimensions() : null;
+        const rows = d && d.rows ? d.rows : (pane.term.rows || 24);
+        if (pane.term.cols !== 400 || pane.term.rows !== rows) pane.term.resize(400, Math.max(2, rows));
+      }
+    } catch (e) {}
     this.renderGutter(pane);
   }
 
@@ -2828,6 +2859,7 @@ class Component extends DCLogic {
       { label: 'Split Terminal Horizontally', fn: () => this.splitPane('row') },
       { label: 'Split Terminal Vertically', fn: () => this.splitPane('col') },
       { label: 'Close Terminal Pane', fn: () => this.closeActivePane() },
+      { label: this.state.termWrap !== false ? 'Wrap Lines: Off (不换行)' : 'Wrap Lines: On (自动换行)', fn: () => this.toggleTermWrap() },
       { label: 'Next Tab', hint: 'Ctrl+Tab', fn: () => this.stepTab(1) },
       { label: 'Previous Tab', fn: () => this.stepTab(-1) },
       { label: 'AI Mode: Auto', fn: () => this.setState({ aiMode: 'auto' }) },
@@ -3889,6 +3921,10 @@ class Component extends DCLogic {
           item('Copy Session Url', () => { try { navigator.clipboard.writeText(s ? (s.type + '://ops@' + s.host) : ''); } catch (e) {} }),
           div,
           item('Reconnect Session', () => { this.setState({ activeTab: id }, () => this.reconnect()); }, 'Return'),
+          div,
+          item('Split View Horizontally', () => { this.setState({ activeTab: id }, () => this.splitPane('row')); }, 'Alt+W, Alt+H'),
+          item('Split View Vertically', () => { this.setState({ activeTab: id }, () => this.splitPane('col')); }, 'Alt+W, Alt+V'),
+          item('Close Pane', this.paneCount() > 1 ? () => this.closeActivePane() : null),
           item('Save Session', null, 'Ctrl+Shift+S'),
           div,
           item('Close View', () => this.closeTab(id), 'Ctrl+Shift+W'),
@@ -4004,6 +4040,8 @@ class Component extends DCLogic {
           it('Split Horizontally', () => this.splitPane('row')),
           it('Split Vertically', () => this.splitPane('col')),
           it('Close Pane', this.paneCount() > 1 ? () => this.closeActivePane() : null),
+          div,
+          it((st.termWrap !== false ? '✓ ' : '  ') + 'Wrap Lines (自动换行)', () => this.toggleTermWrap()),
           div,
           it('Session Triggers…', null),
           it('Transfer Binary', null, '', [si('Send (sz)', () => this.execLocal('rz')), si('Receive (rz)', () => this.execLocal('rz')), si('Zmodem…', null)]),
@@ -4131,7 +4169,7 @@ class Component extends DCLogic {
       sndInterval: st.sender.interval, onSndInterval: (e) => { const v = e.target.value; this.setState(s => ({ sender: Object.assign({}, s.sender, { interval: v }) })); },
       sndTarget: st.sender.target, onSndTarget: (e) => { const v = e.target.value; this.setState(s => ({ sender: Object.assign({}, s.sender, { target: v }) })); },
       sndData: st.sender.data, onSndData: (e) => { const v = e.target.value; this.setState(s => ({ sender: Object.assign({}, s.sender, { data: v }) })); },
-      sndPh: 'Data to send — one payload per line. Sent every ' + (st.sender.interval || '1') + 's to ' + (st.sender.target === 'all' ? 'all sessions' : 'the current session') + '.',
+      sndPh: '',
       senderStatus: st.sender.running ? 'sending · ' + st.sender.sent + ' sent' : (st.sender.sent > 0 ? 'stopped · ' + st.sender.sent + ' sent' : 'idle'),
       senderStatusC: st.sender.running ? 'var(--color-accent-2-700)' : 'var(--color-neutral-500)',
       searchIconC: st.searchOpen || lq ? 'var(--color-accent-700)' : 'var(--color-neutral-600)',
@@ -4337,7 +4375,7 @@ class Component extends DCLogic {
       sendChat: () => this.send(),
       chatBusy: thinkingNow, chatIdle: !thinkingNow,
       stopChat: () => this.stopOpencode(),
-      composerPh: 'Tell the Operator what to do on ' + (active ? active.name : 'this session') + '…',
+      composerPh: '',
       // sessions view
       mgrRows,
       // settings
