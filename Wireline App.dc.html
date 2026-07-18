@@ -4370,7 +4370,7 @@ class Component extends DCLogic {
       termFont: st.termFont + 'px', termLH: String(st.termLH),
       lines: renderedLines,
       termRef: this.termRef, chatRef: this.chatRef, termInputRef: this.termInputRef,
-      xtermOn: this.xtermAvailable(), xtermHostRef: this.xtermHostRef,
+      xtermOn: this.xtermAvailable(), xtermHostRef: this.xtermHostRef, opHostRef: this.opHostRef,
       // split panes
       splitH: () => this.splitPane('row'),
       splitV: () => this.splitPane('col'),
