@@ -556,7 +556,7 @@ body.wl-dragging .wb-grid{transition:none}
       </sc-if>
       <!-- native opencode: the AI panel IS a terminal running the real opencode TUI -->
       <sc-if value="{{ agentNative }}" hint-placeholder-val="{{ false }}">
-      <div ref="{{ opHostRef }}" style="flex:1;min-height:0;position:relative;background:#1b1a19;overflow:hidden"></div>
+      <div ref="{{ opHostRef }}" style="flex:1;min-height:0;display:flex;background:#1b1a19;overflow:hidden"></div>
       </sc-if>
 
       <!-- composer -->
@@ -1759,7 +1759,10 @@ class Component extends DCLogic {
     // measures this box, so cols always equal the VISIBLE width — wrapping
     // happens exactly at the pane edge, never beyond it.
     const inner = document.createElement('div');
-    inner.style.cssText = 'position:absolute;left:78px;right:16px;top:8px;bottom:10px;overflow:hidden';
+    // standalone (native opencode) panes have no timestamp gutter → full width
+    inner.style.cssText = standalone
+      ? 'position:absolute;left:8px;right:8px;top:6px;bottom:6px;overflow:hidden'
+      : 'position:absolute;left:78px;right:16px;top:8px;bottom:10px;overflow:hidden';
     el.appendChild(inner);
     const term = new window.Terminal({
       fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
@@ -1792,7 +1795,10 @@ class Component extends DCLogic {
     // WindTerm-style gutter: a timestamp per output line, aligned to xterm rows.
     // Each timestamp is carried by an xterm marker pinned to its buffer line, so
     // a line keeps the time it was written through scrolling/resizing/reflow.
+    // Standalone (native opencode) panes skip it — a TUI repaints, so per-line
+    // timestamps are meaningless and the left gutter just wastes width.
     try {
+      if (standalone) throw 'no-gutter';
       pane.gutter = document.createElement('div');
       pane.gutter.style.cssText = 'position:absolute;left:0;top:0;width:74px;height:100%;overflow:hidden;pointer-events:none;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11px;z-index:3';
       el.appendChild(pane.gutter);
@@ -2476,17 +2482,21 @@ class Component extends DCLogic {
     if (!host) return;
     if (!this.opPane) {
       const pane = this.createPane(true);
+      pane.el.style.flex = '1 1 0';
       this.opPane = pane;
       host.appendChild(pane.el);
+      // fit FIRST (so the PTY starts at the pane's real size), then connect a
+      // local shell and drop into opencode. Re-fit a couple of times because the
+      // host may still be laying out on the first frame.
       setTimeout(() => {
         this.fitPane(pane);
         this.connectPane(pane, null); // local shell on this machine
-        // give the shell a moment, then drop into the opencode TUI
-        setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: 'opencode\r' }).catch(() => {}); }, 700);
-      }, 50);
+        setTimeout(() => this.fitPane(pane), 250);
+        setTimeout(() => { if (pane.ptyId && window.__TAURI__) window.__TAURI__.invoke('pty_write', { id: pane.ptyId, data: 'opencode\r' }).catch(() => {}); }, 800);
+      }, 60);
     } else if (this.opPane.el.parentNode !== host) {
       host.appendChild(this.opPane.el);
-      setTimeout(() => { this.fitPane(this.opPane); try { this.opPane.term.refresh(0, this.opPane.term.rows - 1); } catch (e) {} }, 30);
+      setTimeout(() => { this.fitPane(this.opPane); try { this.opPane.term.refresh(0, this.opPane.term.rows - 1); } catch (e) {} }, 40);
     }
   }
 
