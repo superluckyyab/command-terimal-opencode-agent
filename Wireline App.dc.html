@@ -52,7 +52,7 @@ body.wl-dragging .wb-grid{transition:none}
 @keyframes wl-rise{from{opacity:0;transform:translateY(5px)}}
 
 /* 15 · typography: comfortable leading for UI text, tight for large headings */
-#dc-root{line-height:1.5}
+#dc-root{line-height:1.45}
 .dialog-title,h2{letter-spacing:-.02em;line-height:1.15}
 
 /* 14 · accessibility: gentle equivalents, not missing feedback */
@@ -70,12 +70,12 @@ body.wl-dragging .wb-grid{transition:none}
 
   <!-- ═══ menu bar ═══ -->
   <div style="display:flex;align-items:center;gap:2px;padding:0 14px;border-bottom:1px solid var(--color-divider);flex:none">
-    <div style="display:flex;align-items:baseline;gap:8px;padding:9px 10px 9px 0">
-      <span style="font-family:var(--font-heading);font-weight:600;font-size:17px">Wireline</span>
+    <div style="display:flex;align-items:baseline;gap:8px;padding:5px 10px 5px 0">
+      <span style="font-family:var(--font-heading);font-weight:600;font-size:14.5px">Wireline</span>
     </div>
     <sc-for list="{{ menus }}" as="mn" hint-placeholder-count="10">
       <div style="position:relative">
-        <div onClick="{{ mn.toggle }}" style="padding:9px 10px;font-size:13px;cursor:pointer;user-select:none;background:{{ mn.bg }}" style-hover="background:var(--color-neutral-200)">{{ mn.label }}</div>
+        <div onClick="{{ mn.toggle }}" style="padding:5px 9px;font-size:12.5px;cursor:pointer;user-select:none;background:{{ mn.bg }}" style-hover="background:var(--color-neutral-200)">{{ mn.label }}</div>
         <sc-if value="{{ mn.open }}" hint-placeholder-val="{{ false }}">
           <div class="pop" style="position:absolute;top:100%;left:0;z-index:60;min-width:220px;background:var(--color-bg);border:1px solid var(--color-divider);box-shadow:var(--shadow-md);padding:4px 0">
             <sc-for list="{{ mn.items }}" as="mi" hint-placeholder-count="3">
@@ -112,7 +112,7 @@ body.wl-dragging .wb-grid{transition:none}
       <span onClick="{{ toggleDark }}" title="{{ darkTip }}" style="display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200)">
         <span style="font-size:14px">{{ darkIcon }}</span>
       </span>
-      <button class="btn btn-primary" style="padding-block:5px" onClick="{{ openDialog }}">New session</button>
+      <button class="btn btn-primary" style="padding-block:3px;font-size:12.5px" onClick="{{ openDialog }}">New session</button>
     </div>
   </div>
   <sc-if value="{{ menuOpenAny }}" hint-placeholder-val="{{ false }}">
@@ -196,7 +196,7 @@ body.wl-dragging .wb-grid{transition:none}
       <div style="display:flex;align-items:stretch;gap:2px;padding:0 10px;border-bottom:1px solid var(--color-divider);flex:none">
         <div style="display:flex;align-items:stretch;gap:2px;overflow-x:auto;flex:1;min-width:0">
         <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="3">
-          <div onMouseDown="{{ tb.down }}" onClick="{{ tb.activate }}" onContextMenu="{{ tb.ctx }}" style="display:flex;align-items:center;gap:8px;padding:9px 12px;cursor:pointer;font-size:13px;border-bottom:2px solid {{ tb.bc }};color:{{ tb.c }};font-weight:{{ tb.w }};white-space:nowrap;background:{{ tb.dragBg }}" style-hover="color:var(--color-accent-600)">
+          <div onMouseDown="{{ tb.down }}" onClick="{{ tb.activate }}" onContextMenu="{{ tb.ctx }}" style="display:flex;align-items:center;gap:7px;padding:6px 10px;cursor:pointer;font-size:12.5px;border-bottom:2px solid {{ tb.bc }};color:{{ tb.c }};font-weight:{{ tb.w }};white-space:nowrap;background:{{ tb.dragBg }}" style-hover="color:var(--color-accent-600)">
             {{ tb.name }}
             <span style="font-family:ui-monospace,Menlo,monospace;font-size:10.5px;color:var(--color-neutral-500)">{{ tb.sub }}</span>
             <span onClick="{{ tb.close }}" style="color:var(--color-neutral-500);padding:0 2px;border-radius:2px" style-hover="color:var(--color-accent-2-700);background:var(--color-neutral-200)">×</span>
@@ -266,7 +266,7 @@ body.wl-dragging .wb-grid{transition:none}
       </div>
 
       <!-- quick-connect toolbar -->
-      <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--color-divider);flex:none">
+      <div style="display:flex;align-items:center;gap:7px;padding:3px 8px;border-bottom:1px solid var(--color-divider);flex:none">
         <span onClick="{{ openDialog }}" title="New session" style="display:grid;place-items:center;width:26px;height:26px;border-radius:var(--radius-md);cursor:pointer;color:var(--color-neutral-700)" style-hover="background:var(--color-neutral-200);color:var(--color-accent-700)">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3.5" width="9" height="9" rx="1"></rect><path d="M13.5 6v7.5H6M11.5 2v3M10 3.5h3"></path></svg>
         </span>
@@ -383,7 +383,7 @@ body.wl-dragging .wb-grid{transition:none}
       </div>
 
       <!-- quick command favorites -->
-      <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-top:1px solid var(--color-divider);flex:none;overflow-x:auto">
+      <div style="display:flex;align-items:center;gap:6px;padding:3px 10px;border-top:1px solid var(--color-divider);flex:none;overflow-x:auto">
         <span style="flex:none;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-neutral-600);padding-right:2px">Quick</span>
         <sc-for list="{{ quickCmds }}" as="q" hint-placeholder-count="4">
           <span onClick="{{ q.run }}" onContextMenu="{{ q.ctx }}" title="{{ q.cmd }}" style="flex:none;display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--color-divider);border-radius:var(--radius-md);cursor:pointer;font-size:12px;white-space:nowrap;font-family:var(--font-body)" style-hover="background:var(--color-accent-100);border-color:var(--color-accent-400)">
@@ -465,7 +465,7 @@ body.wl-dragging .wb-grid{transition:none}
       </sc-if>
 
       <!-- status bar -->
-      <div style="display:flex;align-items:center;gap:16px;padding:6px 18px;border-top:1px solid var(--color-divider);font-size:11.5px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace;flex:none;white-space:nowrap;overflow:hidden;height:26px;box-sizing:border-box">
+      <div style="display:flex;align-items:center;gap:14px;padding:3px 14px;border-top:1px solid var(--color-divider);font-size:11px;color:var(--color-neutral-600);font-family:ui-monospace,Menlo,monospace;flex:none;white-space:nowrap;overflow:hidden;height:22px;box-sizing:border-box">
         <span style="flex:none;white-space:nowrap;color:var(--color-accent-700)">● connected</span>
         <span style="display:flex;gap:16px;min-width:0;overflow:hidden;flex-shrink:1">
           <span style="white-space:nowrap">{{ statusProto }}</span><span>utf-8</span><span>142×38</span><span style="white-space:nowrap">{{ statusPing }}</span>
@@ -481,7 +481,7 @@ body.wl-dragging .wb-grid{transition:none}
     <sc-if value="{{ aiOpen }}" hint-placeholder-val="{{ true }}">
     <div style="position:relative;border-left:1px solid var(--color-divider);display:flex;flex-direction:column;min-height:0" data-screen-label="AI Operator panel">
       <div onMouseDown="{{ aiResizeStart }}" title="Drag to resize" style="position:absolute;top:0;left:-3px;bottom:0;width:6px;cursor:col-resize;z-index:5" style-hover="background:color-mix(in srgb, var(--color-accent) 30%, transparent)"></div>
-      <div style="padding:10px 14px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-neutral-700);flex:none">
+      <div style="padding:6px 12px;border-bottom:1px solid var(--color-divider);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--color-neutral-700);flex:none">
         <span style="width:8px;height:8px;border-radius:50%;background:var(--color-accent-2);flex:none"></span>
         <span style="font-family:ui-monospace,Menlo,monospace;color:var(--color-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0">{{ attachedName }}</span>
         <span style="margin-left:auto;display:flex;gap:3px;align-items:center">
@@ -990,6 +990,22 @@ body.wl-dragging .wb-grid{transition:none}
     </div>
   </sc-if>
 
+  <!-- ═══ FACTORY RESET CONFIRM ═══ -->
+  <sc-if value="{{ resetOpen }}" hint-placeholder-val="{{ false }}">
+    <div class="dialog-backdrop" style="z-index:88">
+      <div class="dialog" style="width:430px" onClick="{{ stop }}">
+        <div class="dialog-title">恢复出厂设置</div>
+        <div style="font-size:13px;color:var(--color-neutral-700);margin-bottom:10px">将删除本机上的全部 Wireline 配置并重启界面：</div>
+        <div style="font-size:12.5px;font-family:ui-monospace,Menlo,monospace;background:var(--color-surface);border:1px solid var(--color-divider);border-radius:var(--radius-md);padding:10px 12px;line-height:1.9;white-space:pre-wrap;margin-bottom:10px">{{ resetSummary }}</div>
+        <div style="font-size:12px;color:var(--color-accent-2-700)">此操作不可恢复。</div>
+        <div class="dialog-actions">
+          <button class="btn btn-secondary" onClick="{{ closeReset }}">Cancel</button>
+          <button class="btn btn-primary" style="background:var(--color-accent-2);border-color:var(--color-accent-2)" onClick="{{ doFactoryReset }}">确认重置</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
   <!-- ═══ NEW SESSION DIALOG (WindTerm compact) — closes only via ×/Cancel ═══ -->
   <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
     <div class="dialog-backdrop" style="z-index:70">
@@ -1343,6 +1359,7 @@ class Component extends DCLogic {
       syncInput: false,
       tsMargin: true,
       termWrap: true,
+      resetOpen: false,
       highlights: [],
       cmdHistories: {},
       cmdHistH: 170,
@@ -1484,6 +1501,22 @@ class Component extends DCLogic {
   // Dynamic line-wrap toggle: refit every pane and persist the choice.
   toggleTermWrap() {
     this.setState(s => ({ termWrap: s.termWrap === false }), () => { this.fitAllPanes(); this.saveConfig(); });
+  }
+
+  // Factory reset: wipe every stored setting (config file + legacy
+  // localStorage) and reload with a factory-fresh interface.
+  factoryReset() {
+    try {
+      Object.keys(localStorage).forEach(k => { if (k.indexOf('wireline') === 0 || k.indexOf('wireline-') === 0) localStorage.removeItem(k); });
+    } catch (e) {}
+    const done = () => { try { location.reload(); } catch (e) {} };
+    if (window.__TAURI__) {
+      const inv = window.__TAURI__.invoke;
+      Promise.all([
+        inv('config_write', { path: this._cfgPath, data: '' }).catch(() => {}),
+        inv('config_write', { path: null, data: '' }).catch(() => {})
+      ]).then(done, done);
+    } else done();
   }
 
   async loadConfig() {
@@ -3450,7 +3483,9 @@ class Component extends DCLogic {
         m('Previous Tab', () => this.stepTab(-1))
       ]},
       { label: 'Help', build: (m) => [
-        m('About Wireline', null, '')
+        m('About Wireline', null, ''),
+        DIV,
+        m('恢复出厂设置 (Factory Reset)…', () => this.setState({ resetOpen: true }), '')
       ]}
     ];
 
@@ -4075,6 +4110,11 @@ class Component extends DCLogic {
       // neutrals lifted a step for legibility (material-weight hierarchy)
       themeVars: st.dark ? '--color-bg:#171615;--color-surface:#211f1e;--color-text:#eceae8;--color-divider:rgba(255,255,255,.09);--color-neutral-100:#1d1c1b;--color-neutral-200:#2a2827;--color-neutral-300:#3a3836;--color-neutral-400:#726e6b;--color-neutral-500:#928e8b;--color-neutral-600:#aca8a5;--color-neutral-700:#c9c5c3;--color-neutral-800:#e0dcda;--color-accent-100:rgba(0,150,190,.20);--color-accent-2-100:rgba(214,0,108,.20)' : '',
       toggleDark: () => this.setState(s => ({ dark: !s.dark })),
+      // factory reset (Help menu)
+      resetOpen: st.resetOpen,
+      closeReset: () => this.setState({ resetOpen: false }),
+      doFactoryReset: () => this.factoryReset(),
+      resetSummary: 'OneKey 凭据 ' + st.oneKeys.length + ' 条 · 快捷命令 ' + st.quickCmds.length + ' 条 (' + st.quickGroups.length + ' 组)\n会话 ' + st.sessions.length + ' 个 · 历史命令 ' + Object.values(st.cmdHistories).reduce((n, a) => n + (a ? a.length : 0), 0) + ' 条\n模型 / API / 日志目录等全部设置',
       darkIcon: st.dark ? '☼' : '☾',
       darkTip: st.dark ? 'Switch to light' : 'Dark mode',
       // session context menu (pin / delete)
