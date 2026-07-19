@@ -33,7 +33,6 @@ const html = `<!DOCTYPE html>
 <script src="./vendor/xterm/xterm.js"></script>
 <script src="./vendor/xterm/addon-fit.js"></script>
 <script src="./vendor/xterm/addon-search.js"></script>
-<script src="./vendor/zmodem/zmodem.js"></script>
 <script src="./support.js"></script>
 </head>
 <body>
@@ -59,7 +58,6 @@ copy('vendor/xterm/xterm.js');
 copy('vendor/xterm/addon-fit.js');
 copy('vendor/xterm/addon-search.js');
 copy('vendor/xterm/xterm.css');
-copy('vendor/zmodem/zmodem.js');
 copy('assets/broadsheet.css');
 copy('_ds/broadsheet-842b0694-9893-4be7-89c5-dcb6c1fdef65/_ds_bundle.js');
 copy('_ds/broadsheet-842b0694-9893-4be7-89c5-dcb6c1fdef65/styles.css');

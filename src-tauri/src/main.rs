@@ -1,5 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod zmodem;
+
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::sync::Mutex;
@@ -14,6 +16,117 @@ struct PtySession {
     // the child itself is owned by the waiter thread (see pty_spawn); we keep a
     // killer handle so pty_kill still works
     killer: Box<dyn portable_pty::ChildKiller + Send + Sync>,
+    // native ZMODEM engine — sees every byte from/to this pty
+    zm: zmodem::Zm,
+}
+
+#[derive(Clone, Serialize)]
+struct ZmOffer {
+    id: String,
+    name: String,
+    size: u64,
+}
+
+#[derive(Clone, Serialize)]
+struct ZmProgress {
+    id: String,
+    name: String,
+    done: u64,
+    total: u64,
+    dir: String,
+}
+
+#[derive(Clone, Serialize)]
+struct ZmNote {
+    id: String,
+    text: String,
+}
+
+// Apply the engine's Event list: writes go to the pty, terminal-bound bytes and
+// UI notifications are collected into `emits` (emitted AFTER the lock is freed).
+enum Emit {
+    Data(Vec<u8>),
+    Offer { name: String, size: u64 },
+    SendReady,
+    Progress { name: String, done: u64, total: u64, dir: String },
+    Done { name: String },
+    Error(String),
+    Finished,
+}
+
+fn apply_zm_events(sess: &mut PtySession, events: Vec<zmodem::Event>, emits: &mut Vec<Emit>) {
+    for ev in events {
+        match ev {
+            zmodem::Event::Write(w) => {
+                let _ = sess.writer.write_all(&w);
+                let _ = sess.writer.flush();
+            }
+            zmodem::Event::Forward(d) => emits.push(Emit::Data(d)),
+            zmodem::Event::RecvOffer { name, size } => emits.push(Emit::Offer { name, size }),
+            zmodem::Event::SendReady => emits.push(Emit::SendReady),
+            zmodem::Event::Progress { name, done, total, dir } => {
+                emits.push(Emit::Progress { name, done, total, dir: dir.to_string() })
+            }
+            zmodem::Event::Done { name, .. } => emits.push(Emit::Done { name }),
+            zmodem::Event::Error(e) => emits.push(Emit::Error(e)),
+            zmodem::Event::Finished => emits.push(Emit::Finished),
+        }
+    }
+    // Drive the send pump until write buffers are handed off.
+    while sess.zm.needs_pump() {
+        let mut more = Vec::new();
+        let cont = sess.zm.pump(&mut more);
+        apply_pump(sess, more, emits);
+        if !cont {
+            break;
+        }
+    }
+}
+
+fn apply_pump(sess: &mut PtySession, events: Vec<zmodem::Event>, emits: &mut Vec<Emit>) {
+    for ev in events {
+        match ev {
+            zmodem::Event::Write(w) => {
+                let _ = sess.writer.write_all(&w);
+                let _ = sess.writer.flush();
+            }
+            zmodem::Event::Progress { name, done, total, dir } => {
+                emits.push(Emit::Progress { name, done, total, dir: dir.to_string() })
+            }
+            zmodem::Event::Done { name, .. } => emits.push(Emit::Done { name }),
+            zmodem::Event::Error(e) => emits.push(Emit::Error(e)),
+            zmodem::Event::Finished => emits.push(Emit::Finished),
+            _ => {}
+        }
+    }
+}
+
+fn flush_emits(app: &tauri::AppHandle, id: &str, emits: Vec<Emit>) {
+    for e in emits {
+        match e {
+            Emit::Data(d) => {
+                let _ = app.emit_all("pty://data", PtyData { id: id.to_string(), data: d });
+            }
+            Emit::Offer { name, size } => {
+                let _ = app.emit_all("zmodem://offer", ZmOffer { id: id.to_string(), name, size });
+            }
+            Emit::SendReady => {
+                let _ = app.emit_all("zmodem://send-ready", PtyExit { id: id.to_string() });
+            }
+            Emit::Progress { name, done, total, dir } => {
+                let _ = app.emit_all("zmodem://progress", ZmProgress { id: id.to_string(), name, done, total, dir });
+            }
+            Emit::Done { name } => {
+                let _ = app.emit_all("zmodem://done", ZmNote { id: id.to_string(), text: name });
+            }
+            Emit::Error(text) => {
+                let _ = app.emit_all("zmodem://error", ZmNote { id: id.to_string(), text });
+            }
+            Emit::Finished => {
+                let _ = app.emit_all("zmodem://finished", PtyExit { id: id.to_string() });
+            }
+        }
+    }
 }
 
 // Arc so async commands can move a clone into spawn_blocking: every PTY
@@ -116,19 +229,32 @@ fn pty_spawn_blocking(
 
     let app2 = app.clone();
     let id2 = id.clone();
+    let st_reader = st.clone();
     std::thread::spawn(move || {
         let mut buf = [0u8; 4096];
         loop {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    let _ = app2.emit_all(
-                        "pty://data",
-                        PtyData {
-                            id: id2.clone(),
-                            data: buf[..n].to_vec(),
-                        },
-                    );
+                    // Feed the ZMODEM engine; it forwards ordinary bytes to the
+                    // terminal and handles rz/sz handshakes/data itself. If the
+                    // session isn't in the map yet (race at spawn), fall back to
+                    // forwarding raw.
+                    let mut emits: Vec<Emit> = Vec::new();
+                    let mut handled = false;
+                    if let Ok(mut map) = st_reader.lock() {
+                        if let Some(sess) = map.get_mut(&id2) {
+                            let mut events = Vec::new();
+                            sess.zm.feed(&buf[..n], &mut events);
+                            apply_zm_events(sess, events, &mut emits);
+                            handled = true;
+                        }
+                    }
+                    if handled {
+                        flush_emits(&app2, &id2, emits);
+                    } else {
+                        let _ = app2.emit_all("pty://data", PtyData { id: id2.clone(), data: buf[..n].to_vec() });
+                    }
                 }
                 Err(_) => break,
             }
@@ -153,9 +279,84 @@ fn pty_spawn_blocking(
             writer,
             master: pair.master,
             killer,
+            zm: zmodem::Zm::new(),
         },
     );
     Ok(())
+}
+
+// ── ZMODEM commands (frontend → engine) ──
+
+#[tauri::command]
+async fn zmodem_accept(
+    id: String,
+    path: String,
+    app: tauri::AppHandle,
+    state: State<'_, PtyState>,
+) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut emits = Vec::new();
+        if let Ok(mut map) = st.lock() {
+            if let Some(sess) = map.get_mut(&id) {
+                let mut events = Vec::new();
+                sess.zm.accept_receive(std::path::PathBuf::from(path), &mut events);
+                apply_zm_events(sess, events, &mut emits);
+            }
+        }
+        flush_emits(&app, &id, emits);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn zmodem_send(
+    id: String,
+    paths: Vec<String>,
+    app: tauri::AppHandle,
+    state: State<'_, PtyState>,
+) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut emits = Vec::new();
+        if let Ok(mut map) = st.lock() {
+            if let Some(sess) = map.get_mut(&id) {
+                let mut events = Vec::new();
+                let pbs = paths.into_iter().map(std::path::PathBuf::from).collect();
+                sess.zm.start_send(pbs, &mut events);
+                apply_zm_events(sess, events, &mut emits);
+            }
+        }
+        flush_emits(&app, &id, emits);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn zmodem_cancel(
+    id: String,
+    app: tauri::AppHandle,
+    state: State<'_, PtyState>,
+) -> Result<(), String> {
+    let st = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut emits = Vec::new();
+        if let Ok(mut map) = st.lock() {
+            if let Some(sess) = map.get_mut(&id) {
+                let mut events = Vec::new();
+                sess.zm.cancel(&mut events);
+                apply_zm_events(sess, events, &mut emits);
+            }
+        }
+        flush_emits(&app, &id, emits);
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -449,7 +650,8 @@ fn main() {
         .manage(PtyState::default())
         .invoke_handler(tauri::generate_handler![
             pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill, run_command, read_file,
-            write_file, config_default_path, config_read, config_write
+            write_file, config_default_path, config_read, config_write,
+            zmodem_accept, zmodem_send, zmodem_cancel
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
