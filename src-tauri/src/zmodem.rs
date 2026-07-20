@@ -481,9 +481,20 @@ impl Zm {
             .position(|w| w == sig);
         match pos {
             None => {
-                // keep a small tail in case the signature is split across chunks
-                if self.buf.len() > 3 {
-                    let keep = self.buf.split_off(self.buf.len() - 3);
+                // Hold back ONLY a tail that's an actual prefix of `sig` (so a
+                // signature split across chunks is still caught) — not an
+                // unconditional last-3-bytes. A blind 3-byte holdback would sit
+                // on ordinary output (e.g. the trailing ": " of a "password:"
+                // prompt, which is often the last thing the remote ever sends
+                // before it blocks waiting for input) until more data arrives,
+                // which for an interactive prompt may be never.
+                let max_hold = (sig.len() - 1).min(self.buf.len());
+                let hold = (1..=max_hold)
+                    .rev()
+                    .find(|&k| self.buf[self.buf.len() - k..] == sig[..k])
+                    .unwrap_or(0);
+                if self.buf.len() > hold {
+                    let keep = self.buf.split_off(self.buf.len() - hold);
                     let fwd = std::mem::replace(&mut self.buf, keep);
                     out.push(Event::Forward(fwd));
                 }
@@ -990,5 +1001,39 @@ fn hex_val(b: u8) -> Option<u8> {
         b'a'..=b'f' => Some(b - b'a' + 10),
         b'A'..=b'F' => Some(b - b'A' + 10),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn forwarded(out: &[Event]) -> Vec<u8> {
+        out.iter()
+            .filter_map(|e| if let Event::Forward(d) = e { Some(d.clone()) } else { None })
+            .flatten()
+            .collect()
+    }
+
+    #[test]
+    fn idle_forwards_plain_text_immediately() {
+        // Regression for the "password:" prompt getting stuck: ordinary text with
+        // no signature-prefix tail must be forwarded in full, not held back.
+        let mut zm = Zm::new();
+        let mut out = Vec::new();
+        zm.feed(b"Password: ", &mut out);
+        assert_eq!(forwarded(&out), b"Password: ");
+    }
+
+    #[test]
+    fn idle_still_holds_a_genuine_signature_prefix() {
+        let mut zm = Zm::new();
+        let mut out = Vec::new();
+        zm.feed(b"noise**", &mut out); // "noise" + first 2 bytes of the signature
+        assert_eq!(forwarded(&out), b"noise");
+        out.clear();
+        zm.feed(&[ZDLE, ZHEX], &mut out); // completes the "**<ZDLE>B" signature
+        // the signature bytes must never be forwarded as plain terminal text
+        assert!(!forwarded(&out).contains(&ZDLE));
     }
 }
