@@ -73,5 +73,18 @@ assertEq(mig3.model, 'opencode', 'a stale custom model name (old __add__ flow) f
 const mig4 = migrateModelConfig.call(fakeThis, { apiBase: 'https://x', apiKey: 'k', model: '__chat__' });
 assertEq(mig4.model, '__chat__', '__chat__ sentinel preserved through migration');
 
+// --- mcpStatusDesc(st) — real opencode McpStatus union (types.gen.d.ts) ---
+// Verified live against a real `opencode serve` + GET /mcp during development
+// (empty-config response parsed to []); these are the structurally-accurate
+// shapes for the populated case, including the exact "connected" status the
+// real embedded-ssh-agent MCP reports.
+const mcpStatusDesc = extractMethod('mcpStatusDesc');
+assertEq(mcpStatusDesc({ status: 'connected' }), 'MCP · connected', 'connected status');
+assertEq(mcpStatusDesc({ status: 'disabled' }), 'MCP · disabled', 'disabled status');
+assertEq(mcpStatusDesc({ status: 'needs_auth' }), 'MCP · needs auth', 'needs_auth status');
+assertEq(mcpStatusDesc({ status: 'needs_client_registration' }), 'MCP · needs registration', 'needs_client_registration status');
+assertEq(mcpStatusDesc({ status: 'failed', error: 'connection refused' }), 'MCP · failed: connection refused', 'failed status includes the error');
+assertEq(mcpStatusDesc({}), 'MCP server', 'missing status falls back to a generic label, not a crash');
+
 console.log(passed + ' passed, ' + failed + ' failed');
 if (failed > 0) process.exit(1);

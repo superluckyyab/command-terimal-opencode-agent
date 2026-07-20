@@ -2,18 +2,6 @@
 
 ## Wireline
 
-### Real MCP protocol integration
-
-**What:** Let `/mcp` actually discover and connect to locally-configured MCP servers, replacing `this.state.mcps`'s hardcoded demo list (kubernetes/prometheus/github/generic canned responses).
-
-**Why:** Right now selecting `@kubernetes` etc. returns a scripted fake reply — no real value. The multi-model + `@`-mention picker design (kaifa-main-design-20260720-133936.md) depends on this shipping first and explicitly deferred real MCP wiring (premise 5) to keep that PR scoped.
-
-**Context:** `this.state.mcps` and the `/mcp`/`@name` targeting UI (Wireline App.dc.html:3403-3454, 4581-4590) are in place and will be reused as-is — this TODO is purely about swapping the fake candidate list and canned responses for a real MCP client (discovery, connection management, auth). Substantial scope on its own; not a small follow-up.
-
-**Effort:** L
-**Priority:** P2
-**Depends on:** None
-
 ### Caret-following popover positioning for the `@` picker
 
 **What:** Make the `@` mention picker open near the actual cursor position (Slack/Discord/IDE-style), instead of the composer's existing static block-above-textarea placement.
@@ -39,3 +27,11 @@
 **Depends on:** None
 
 ## Completed
+
+### Real MCP discovery/listing (`@` picker + `/mcp` now show real opencode MCP servers)
+
+**What:** Wireline spawns a background `opencode serve` (`opencode_serve_ensure` in main.rs, fixed port 47823) and reads `GET /mcp` (see `loadMcps()`/`mcpStatusDesc()`), so the `@` picker and `/mcp` list real, locally-configured MCP servers and their live status (connected/failed/needs_auth/etc) — replaces the old hardcoded filesystem/kubernetes/prometheus/github demo list. Also fixed: the picker no longer intercepts `@` while in native-opencode mode (that composer pipes straight into the real opencode PTY).
+
+**Resolution note:** Actually *calling* a specific MCP's tools mid-conversation turned out not to need any further Wireline code — it's a property of which MCP server is configured, not something Wireline mediates. The user's original `ssh-mcp` package bakes host/user/password into its own launch args, so switching SSH targets needed an `opencode.json` edit + restart; `@renqf/sshmcp` (every operation tool takes a `serverId`, servers managed live via its own GUI on port 3789, no opencode restart) is a better fit — an opencode-side config swap, zero Wireline changes. Opencode's own agent already auto-invokes tools from connected/enabled MCPs when relevant, standard MCP behavior, no explicit `@mention` required.
+
+**Completed:** v1.27.0 (2026-07-20)

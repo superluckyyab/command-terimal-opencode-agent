@@ -645,13 +645,84 @@ fn run_command_blocking(
     })
 }
 
+// Fixed, uncommon port — the frontend's @ mention picker (real MCP servers)
+// hits this same constant directly via fetch(), so it must never be dynamic.
+const OPENCODE_SERVE_PORT: u16 = 47823;
+
+// Holds the child so it isn't dropped (dropping a std::process::Child does
+// NOT kill it, but we still want one live handle around, not a leaked spawn
+// per call). No app-exit cleanup here — this app has no window-close hook
+// for the PTY children either (see pty_kill), so an orphaned `opencode serve`
+// on quit is consistent with existing behavior, not a regression.
+#[derive(Default)]
+struct OpencodeServeState(Mutex<Option<std::process::Child>>);
+
+// Spawn `opencode serve` once, detached, so the @ mention picker can query
+// its real MCP status over HTTP (GET /mcp) regardless of which terminal or
+// AI mode is active — unlike native-opencode mode, Operator/chat isn't tied
+// to any single running opencode session. Idempotent: a second call while
+// already running is a no-op that just confirms the port.
+#[tauri::command]
+fn opencode_serve_ensure(state: State<'_, OpencodeServeState>) -> Result<u16, String> {
+    let mut guard = state.0.lock().map_err(|e| e.to_string())?;
+    if let Some(child) = guard.as_mut() {
+        // still alive? try_wait() returns None while running, Some(status) once exited
+        if matches!(child.try_wait(), Ok(None)) {
+            return Ok(OPENCODE_SERVE_PORT);
+        }
+    }
+    use std::process::{Command, Stdio};
+    let resolved = resolve_program("opencode");
+    let mut cmd = Command::new(&resolved);
+    cmd.args([
+        "serve",
+        "--port",
+        &OPENCODE_SERVE_PORT.to_string(),
+        "--hostname",
+        "127.0.0.1",
+    ]);
+    let base = std::env::var("PATH").unwrap_or_default();
+    let mut extra = String::from("/usr/local/bin:/opt/homebrew/bin");
+    if let Some(home) = dirs_home() {
+        for d in [".opencode/bin", ".local/bin", ".bun/bin", ".npm-global/bin"] {
+            extra.push(':');
+            extra.push_str(&home.join(d).to_string_lossy());
+        }
+    }
+    cmd.env(
+        "PATH",
+        if base.is_empty() { extra } else { format!("{}:{}", base, extra) },
+    );
+    // Same default as run_command_blocking: no explicit dir → run from the
+    // user's home, not wherever the Tauri app binary happens to be, so
+    // project-relative resolution (if opencode ever does any) matches what
+    // running `opencode` from a normal terminal would see.
+    if let Some(home) = dirs_home() {
+        cmd.current_dir(home);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("opencode not available: {}", e))?;
+    *guard = Some(child);
+    Ok(OPENCODE_SERVE_PORT)
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(PtyState::default())
+        .manage(OpencodeServeState::default())
         .invoke_handler(tauri::generate_handler![
             pty_spawn, pty_write, pty_write_bytes, pty_resize, pty_kill, run_command, read_file,
             write_file, config_default_path, config_read, config_write,
-            zmodem_accept, zmodem_send, zmodem_cancel
+            zmodem_accept, zmodem_send, zmodem_cancel, opencode_serve_ensure
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
