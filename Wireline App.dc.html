@@ -4781,14 +4781,14 @@ class Component extends DCLogic {
       ].filter(x => x.cmd.startsWith(st.draft.trim()) || st.draft.trim() === '/').map(x => ({ cmd: x.cmd, desc: x.desc, pick: () => this.setState({ draft: x.cmd + ' ' }) })),
       // @ mention picker: unlike slashOn (only ever the whole draft), this
       // backward-scans from the caret so "@" works anywhere in the message —
-      // see findAtTrigger/atCandidates/pickAtCandidate. Disabled in native
-      // opencode mode — that composer pipes keystrokes straight into the
-      // REAL opencode CLI's own PTY (see send()), so Wireline's picker must
-      // not intercept "@" there and shadow whatever opencode's own TUI does
-      // with it.
-      atOn: (() => { if (st.agentMode === 'native') return false; const t = this.findAtTrigger(st.draft, st.draftCaret, '@'); return !!t && !st.atClosed; })(),
+      // see findAtTrigger/atCandidates/pickAtCandidate. Also active in native
+      // opencode mode: the composer is LINE-based there (send() pipes the
+      // finished line into opencode's PTY, not keystroke-by-keystroke), so the
+      // picker only ever edits the local draft — an inserted "@name" reaches
+      // opencode as plain text in the sent line, no shadowing of the TUI's
+      // own live @ handling. Esc closes the picker if a literal @ is wanted.
+      atOn: (() => { const t = this.findAtTrigger(st.draft, st.draftCaret, '@'); return !!t && !st.atClosed; })(),
       atItems: (() => {
-        if (st.agentMode === 'native') return [];
         const trig = this.findAtTrigger(st.draft, st.draftCaret, '@');
         if (!trig || st.atClosed) return [];
         return this.atCandidates(trig.token).map((it, i) => ({
@@ -4934,16 +4934,14 @@ class Component extends DCLogic {
       },
       draft: st.draft,
       onDraft: (e) => {
-        if (this.state.agentMode !== 'native') {
-          const wasOn = !!this.findAtTrigger(this.state.draft, this.state.draftCaret, '@');
-          const nowOn = !!this.findAtTrigger(e.target.value, e.target.selectionStart, '@');
-          if (nowOn && !wasOn) this.loadMcps(); // refresh real MCP status right as the picker opens
-        }
+        const wasOn = !!this.findAtTrigger(this.state.draft, this.state.draftCaret, '@');
+        const nowOn = !!this.findAtTrigger(e.target.value, e.target.selectionStart, '@');
+        if (nowOn && !wasOn) this.loadMcps(); // refresh real MCP status right as the picker opens
         this.setState({ draft: e.target.value, draftCaret: e.target.selectionStart, atClosed: false, atSel: 0 });
       },
       onDraftBlur: () => setTimeout(() => this.setState({ atClosed: true }), 150), // delayed so a candidate click still registers first
       onDraftKey: (e) => {
-        const trig = this.state.agentMode !== 'native' && this.findAtTrigger(this.state.draft, this.state.draftCaret, '@');
+        const trig = this.findAtTrigger(this.state.draft, this.state.draftCaret, '@');
         if (trig && !this.state.atClosed) {
           const n = this.atCandidates(trig.token).length;
           if (e.key === 'Escape') { e.preventDefault(); this.setState({ atClosed: true }); return; }
