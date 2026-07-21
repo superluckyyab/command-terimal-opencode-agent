@@ -672,8 +672,18 @@ fn opencode_serve_ensure(state: State<'_, OpencodeServeState>) -> Result<u16, St
         }
     }
     use std::process::{Command, Stdio};
-    let resolved = resolve_program("opencode");
-    let mut cmd = Command::new(&resolved);
+    let mut cmd = if cfg!(windows) {
+        // npm-global CLIs are .cmd shims on Windows → run through cmd.exe
+        let mut c = Command::new("cmd");
+        c.arg("/C").arg("opencode");
+        c
+    } else {
+        #[cfg(not(windows))]
+        let resolved = resolve_program("opencode");
+        #[cfg(windows)]
+        let resolved = "opencode".to_string();
+        Command::new(&resolved)
+    };
     cmd.args([
         "serve",
         "--port",
