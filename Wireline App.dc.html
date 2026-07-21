@@ -2198,9 +2198,21 @@ class Component extends DCLogic {
       listen('zmodem://done', ev => { const p = ev.payload; const pane = p && this.paneByPty(p.id); zn(pane, '✓ ' + p.text); }).then(un => { this.zmUnDone = un; });
       listen('zmodem://error', ev => { const p = ev.payload; const pane = p && this.paneByPty(p.id); zn(pane, '✗ ' + p.text); }).then(un => { this.zmUnErr = un; });
       listen('zmodem://finished', ev => { const p = ev.payload; const pane = p && this.paneByPty(p.id); try { pane && pane.term.write('\r\n'); } catch (e) {} }).then(un => { this.zmUnFin = un; });
-      // OS file drop → kick off rz on the remote; the send-ready event uploads them
+      // OS file drop → kick off rz on the remote, UNLESS the composer was the
+      // last-focused control (clicked into it, then dragged a file in) — then
+      // insert the full path into the chat message instead. Tauri v1's
+      // file-drop event carries no drop coordinates (Windows especially: the
+      // OS-level capture needed for real absolute paths also swallows native
+      // HTML5 drag events entirely, see the tab-reorder comment below), so
+      // "what had focus right before the OS drag started" is the only signal
+      // available to route between the two targets.
       listen('tauri://file-drop', async ev => {
-        const paths = ev.payload; if (!Array.isArray(paths) || !paths.length || !this.xtermId) return;
+        const paths = ev.payload; if (!Array.isArray(paths) || !paths.length) return;
+        if (this.draftRef.current && document.activeElement === this.draftRef.current) {
+          this.composerDropPaths(paths);
+          return;
+        }
+        if (!this.xtermId) return;
         this._pendingUploads = paths;
         this.writeToPty('rz\r');
         clearTimeout(this._rzTimer);
@@ -3469,17 +3481,25 @@ class Component extends DCLogic {
   }
 
   // Merged, type-tagged @ mention candidates: MCP servers (insert a live
-  // "@name " reference sendAI resolves at send time) and OneKey credentials
-  // (insert the plaintext "user:pass " itself — see design doc premise 4).
+  // "@name " reference sendAI resolves at send time), OneKey credentials
+  // (insert the plaintext "user:pass " itself — see design doc premise 4),
+  // and currently-connected SSH devices from the left session tree (insert
+  // the full "ssh://host:port " so the AI gets an unambiguous target).
   atCandidates(token) {
     const t = (token || '').toLowerCase();
     const mcp = this.state.mcps
       .filter(m => !t || m.name.toLowerCase().includes(t))
       .map(m => ({ type: 'mcp', key: 'mcp:' + m.name, label: '@' + m.name, desc: m.desc || 'MCP server', insertText: '@' + m.name + ' ' }));
+    const devices = this.state.sessions
+      .filter(s2 => s2.type === 'ssh' && s2.live && s2.addr && (!t || (s2.name || '').toLowerCase().includes(t) || s2.addr.toLowerCase().includes(t)))
+      .map(s2 => {
+        const url = 'ssh://' + s2.addr + (s2.port ? ':' + s2.port : '');
+        return { type: 'device', key: 'device:' + s2.id, label: s2.name || s2.addr, desc: url + ' · connected', insertText: url + ' ' };
+      });
     const keys = this.state.oneKeys
       .filter(k => k.pass && (!t || (k.name || '').toLowerCase().includes(t)))
       .map(k => ({ type: 'onekey', key: 'onekey:' + k.id, label: k.name || k.user, desc: (k.user || '') + ' · OneKey', insertText: (k.user || '') + ':' + k.pass + ' ' }));
-    return mcp.concat(keys);
+    return mcp.concat(devices, keys);
   }
 
   // Splice an @-picker candidate's text in at the trigger position (replacing
@@ -3493,6 +3513,23 @@ class Component extends DCLogic {
     this.setState({ draft: newDraft, draftCaret: newCaret, atClosed: true, atSel: 0 }, () => {
       const el = this.draftRef.current;
       if (!el) { console.warn('Wireline: draftRef.current is null — caret was not restored after an @ mention insert.'); return; }
+      el.focus();
+      el.selectionStart = el.selectionEnd = newCaret;
+    });
+  }
+
+  // Drag a file onto the composer → insert its full absolute path as the
+  // start of a sentence, caret left right after "传入到 " so the user types
+  // what to do with it. Multiple files dropped together get one line each.
+  composerDropPaths(paths) {
+    const text = paths.map(p => '"' + p + '" 传入到 ').join('\n');
+    const d = this.state.draft;
+    const caret = typeof this.state.draftCaret === 'number' ? this.state.draftCaret : d.length;
+    const newDraft = d.slice(0, caret) + text + d.slice(caret);
+    const newCaret = caret + text.length;
+    this.setState({ draft: newDraft, draftCaret: newCaret }, () => {
+      const el = this.draftRef.current;
+      if (!el) return;
       el.focus();
       el.selectionStart = el.selectionEnd = newCaret;
     });

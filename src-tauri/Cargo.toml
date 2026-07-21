@@ -1,6 +1,6 @@
 [package]
 name = "wireline"
-version = "1.28.1"
+version = "1.29.0"
 description = "Wireline — terminal manager with an AI Operator"
 authors = []
 edition = "2021"
