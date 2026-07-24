@@ -4395,7 +4395,7 @@ class Component extends DCLogic {
           item('Duplicate SSH Channel', s && s.type === 'ssh' ? () => this.duplicateSession(id) : null),
           div,
           item('Copy Session Name', () => { try { navigator.clipboard.writeText(st.aliases[id] || (s ? s.name : '')); } catch (e) {} }),
-          item('Copy Session Url', () => { try { navigator.clipboard.writeText(s ? (s.type + '://ops@' + s.host) : ''); } catch (e) {} }),
+          item('Copy Session Url', () => { try { navigator.clipboard.writeText(s ? (s.type + '://' + (s.user ? s.user + '@' : '') + (s.addr || s.host) + (s.port ? ':' + s.port : '')) : ''); } catch (e) {} }),
           div,
           item('Reconnect Session', () => { this.setState({ activeTab: id }, () => this.reconnect()); }, 'Return'),
           div,
