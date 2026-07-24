@@ -1613,6 +1613,7 @@ class Component extends DCLogic {
     if (typeof cfg.termWrap === 'boolean') next.termWrap = cfg.termWrap;
     if (cfg.agentMode) next.agentMode = cfg.agentMode;
     if (Array.isArray(cfg.aiPrompts)) next.aiPrompts = this.dedupeIds(cfg.aiPrompts, 'ap');
+    if (Array.isArray(cfg.sessions)) next.sessions = this.dedupeIds(cfg.sessions.map(s => Object.assign({}, s, { live: false })), 's');
     if (Object.keys(next).length) this.setState(next, () => this.fitAllPanes());
   }
 
@@ -1625,6 +1626,7 @@ class Component extends DCLogic {
       model: st.model,
       chatModels: st.chatModels,
       aiPrompts: st.aiPrompts,
+      sessions: st.sessions,
       logDir: st.recDir,
       termWrap: st.termWrap !== false,
       agentMode: st.agentMode
@@ -2672,10 +2674,10 @@ class Component extends DCLogic {
   // default local shell.
   newLocalTerminal() {
     const n = this.state.sessions.filter(s => s.type === 'local').length + 1;
-    const id = 'local' + (++this.seq);
+    const id = this.uid('local');
     const name = 'local-' + n;
     const sess = { id, name, host: name, sub: 'shell · local', type: 'local', group: 'Sessions', live: true, access: 'allowed', ping: '—', addr: '', port: '', user: '', pass: '' };
-    this.setState(s => ({ sessions: s.sessions.concat(sess) }), () => this.openSession(id));
+    this.setState(s => ({ sessions: s.sessions.concat(sess) }), () => { this.openSession(id); this.saveConfig(); });
   }
 
   closeTab(id, e) {
@@ -2737,12 +2739,12 @@ class Component extends DCLogic {
 
   duplicateSession(id) {
     const src = this.sess(id); if (!src) return;
-    const nid = 'dup' + (++this.seq);
+    const nid = this.uid('dup');
     const copy = Object.assign({}, src, { id: nid, name: src.name });
     this.setState(s => ({
       sessions: s.sessions.concat(copy),
       buffers: Object.assign({}, s.buffers, { [nid]: [this.mkLine.o('Duplicated session \u00b7 connected to ' + src.host + ' \u00b7 ' + new Date().toLocaleTimeString(), this.C.OK)] })
-    }), () => this.openSession(nid));
+    }), () => { this.openSession(nid); this.saveConfig(); });
   }
 
   closeOtherTabs(id) { this.setState(s => ({ closedTabs: s.closedTabs.concat(s.openTabs.filter(t => t !== id)).slice(-10), openTabs: [id], activeTab: id })); }
@@ -3009,7 +3011,7 @@ class Component extends DCLogic {
     const id = sess.id;
     // the credential picked/entered in the login dialog is authoritative for the
     // username — it must override any default carried on the session (e.g. 'ops').
-    if (key && key.user) sess.user = key.user;
+    if (key) { sess.user = key.user || ''; sess.pass = key.pass || ''; }
     this.setState(s => ({
       sessions: s.sessions.concat(sess),
       pickerOpen: false, pendingSession: null,
@@ -3018,7 +3020,7 @@ class Component extends DCLogic {
         this.mkLine.o('Authenticated as ' + key.user + ' via OneKey \u201c' + key.name + '\u201d', this.C.OK),
         this.mkLine.o('Last login: ' + new Date().toString().slice(0, 24))
       ] })
-    }), () => this.openSession(id));
+    }), () => { this.openSession(id); this.saveConfig(); });
   }
 
   runQuick(cmd) {
@@ -3072,10 +3074,10 @@ class Component extends DCLogic {
 
   quickConnect(host) {
     host = (host || '').trim(); if (!host) return;
-    const id = 'qc' + (++this.seq);
+    const id = this.uid('qc');
     // host may be "user@host" or "host"; ssh handles the user prefix directly
     const sess = { id, name: host, host, sub: host + ' \u00b7 ssh', type: 'ssh', group: 'Quick', live: true, access: 'allowed', ping: '\u2014', addr: host, port: '22', user: '' };
-    this.setState(s => ({ sessions: s.sessions.concat(sess), qcHost: '' }), () => this.openSession(id));
+    this.setState(s => ({ sessions: s.sessions.concat(sess), qcHost: '' }), () => { this.openSession(id); this.saveConfig(); });
   }
 
   removeQuick(id) { this.setState(s => ({ quickCmds: s.quickCmds.filter(q => q.id !== id) })); }
@@ -3098,7 +3100,7 @@ class Component extends DCLogic {
         activeTab: s.activeTab === id ? (openTabs[0] || null) : s.activeTab,
         ctx: { open: false, x: 0, y: 0, id: null }
       };
-    });
+    }, () => this.saveConfig());
   }
 
   startPanelDrag(e, which) {
@@ -3738,7 +3740,7 @@ class Component extends DCLogic {
     const d = this.state.dlg;
     const name = d.label.trim() || d.host || (d.type === 'Shell' ? 'local-shell' : (d.type === 'AI Agent' ? 'new-agent' : 'session'));
     const type = { 'SSH': 'ssh', 'Serial': 'serial', 'Telnet': 'telnet', 'Shell': 'local', 'Local': 'local', 'AI Agent': 'agent' }[d.type];
-    const id = 'new' + (++this.seq);
+    const id = this.uid('s');
     const sub = type === 'agent' ? 'agent · idle' : type === 'serial' ? d.host + ' · ' + d.baud + ' ' + d.dataBits + (d.parity === 'None' ? 'N' : d.parity[0]) + d.stopBits : type === 'local' ? (d.host || 'zsh') + ' · ~' : d.host + ':' + d.port;
     // Credentials come from a picked OneKey, or the username/password fields.
     let user = d.user || '', pass = d.pass || '';
@@ -3751,7 +3753,7 @@ class Component extends DCLogic {
     this.setState(s => {
       const dlg = Object.assign({}, s.dlg, { host: '', user: '', pass: '', label: '', oneKey: '' });
       return { sessions: s.sessions.concat(sess), dialogOpen: false, dlg };
-    }, () => this.openSession(id));
+    }, () => { this.openSession(id); this.saveConfig(); });
   }
 
   // OneKey names are aliases and must be unique — suffix until free.
@@ -4089,7 +4091,7 @@ class Component extends DCLogic {
       typeTagClass: 'tag ' + (s.type === 'agent' ? 'tag-accent-2' : s.type === 'ssh' ? 'tag-accent' : 'tag-neutral'),
       access: s.access,
       accessClass: 'tag ' + (s.access === 'allowed' ? 'tag-outline' : 'tag-neutral'),
-      toggleAccess: () => { if (s.access === '—') return; this.setState(x => ({ sessions: x.sessions.map(q => q.id === s.id ? Object.assign({}, q, { access: q.access === 'allowed' ? 'blocked' : 'allowed' }) : q) })); },
+      toggleAccess: () => { if (s.access === '—') return; this.setState(x => ({ sessions: x.sessions.map(q => q.id === s.id ? Object.assign({}, q, { access: q.access === 'allowed' ? 'blocked' : 'allowed' }) : q) }), () => this.saveConfig()); },
       status: s.live ? 'live now' : 'offline',
       statusC: s.live ? 'var(--color-accent-700)' : 'var(--color-neutral-500)',
       open: () => this.openSession(s.id)
